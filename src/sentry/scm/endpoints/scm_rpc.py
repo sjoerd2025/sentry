@@ -7,7 +7,6 @@ from typing import Any
 import sentry_sdk
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.exceptions import (
     AuthenticationFailed,
     NotFound,
@@ -23,6 +22,7 @@ from sentry.api.authentication import AuthenticationSiloLimit, StandardAuthentic
 from sentry.api.base import Endpoint, internal_region_silo_endpoint
 from sentry.hybridcloud.rpc.service import RpcAuthenticationSetupException
 from sentry.scm.actions import SourceCodeManager
+from sentry.scm.errors import SCMCodedError, SCMError, SCMProviderException
 from sentry.silo.base import SiloMode
 
 logger = logging.getLogger(__name__)
@@ -161,10 +161,6 @@ class ScmRpcServiceEndpoint(Endpoint):
             return method(scm, **arguments)
         except TypeError as e:
             raise ValidationError(f"Error calling method {method_name}: {str(e)}") from e
-        except ObjectDoesNotExist as e:
-            raise NotFound(
-                f"Repository not found for organization_id={organization_id} and repository_id={repository_id}"
-            ) from e
 
     @sentry_sdk.trace
     def post(self, request: Request, method_name: str) -> Response:
@@ -184,6 +180,15 @@ class ScmRpcServiceEndpoint(Endpoint):
 
         try:
             result = self._dispatch_to_source_code_manager(method_name, arguments)
+        except SCMCodedError as e:
+            sentry_sdk.capture_exception()
+            return Response(data={"error": e.args}, status=400)
+        except SCMProviderException as e:
+            sentry_sdk.capture_exception()
+            return Response(data={"error": e.args}, status=503)
+        except SCMError as e:
+            sentry_sdk.capture_exception()
+            return Response(data={"error": e.args}, status=500)
         except Exception:
             sentry_sdk.capture_exception()
             raise

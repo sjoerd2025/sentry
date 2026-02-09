@@ -12,23 +12,39 @@ if TYPE_CHECKING:
 
 from sentry.scm.actions import SourceCodeManager
 from sentry.scm.endpoints.scm_rpc import generate_request_signature, scm_method_registry
+from sentry.scm.errors import SCMCodedError, SCMError, SCMProviderException, SCMUnhandledException
 from sentry.testutils.cases import APITestCase
 
 
 @contextlib.contextmanager
-def add_say_hello():
+def add_method(method_name: str, method_fn: Any):
     # Inject a test-only RPC method for cases that go beyond common arguments validation
+    assert method_name not in scm_method_registry
+    scm_method_registry[method_name] = method_fn
+    try:
+        yield
+    finally:
+        del scm_method_registry[method_name]
+
+
+@contextlib.contextmanager
+def add_say_hello():
     def say_hello(scm: SourceCodeManager, *, name: str) -> dict[str, str]:
         return {
             "message": f"Hello, {name}! You are from organization {scm.organization_id} and repository {scm.repository_id}."
         }
 
-    assert "say_hello" not in scm_method_registry
-    scm_method_registry["say_hello"] = say_hello
-    try:
+    with add_method("say_hello", say_hello):
         yield
-    finally:
-        del scm_method_registry["say_hello"]
+
+
+@contextlib.contextmanager
+def add_raise_scm_error(error: SCMError):
+    def raise_scm_error(scm: SourceCodeManager) -> dict[str, str]:
+        raise error
+
+    with add_method("raise_scm_error", raise_scm_error):
+        yield
 
 
 @override_settings(SCM_RPC_SHARED_SECRET=["a-long-value-that-is-hard-to-guess"])
@@ -252,3 +268,32 @@ class TestScmRpc(APITestCase):
         response = self.call("say_hello", {"args": []})
         assert response.status_code == 400
         assert response.json() == {"detail": "Argument 'args' must be a dictionary"}
+
+    def test_scm_error_in_provider_method(self) -> None:
+        with add_raise_scm_error(SCMUnhandledException("Blah", 68)):
+            response = self.call(
+                "raise_scm_error",
+                {"args": {"organization_id": 42, "repository_id": 57}},
+            )
+            assert response.status_code == 500
+            assert response.json() == {"error": ["Blah", 68]}
+
+    def test_scm_coded_error_in_provider_method(self) -> None:
+        with add_raise_scm_error(SCMCodedError("Blah", 68, code="repository_not_found")):
+            response = self.call(
+                "raise_scm_error",
+                {"args": {"organization_id": 42, "repository_id": 57}},
+            )
+            assert response.status_code == 400
+            assert response.json() == {
+                "error": ["repository_not_found", "A repository could not be found.", "Blah", 68]
+            }
+
+    def test_scm_provider_exception_in_provider_method(self) -> None:
+        with add_raise_scm_error(SCMProviderException("Blah", 68)):
+            response = self.call(
+                "raise_scm_error",
+                {"args": {"organization_id": 42, "repository_id": 57}},
+            )
+            assert response.status_code == 503
+            assert response.json() == {"error": ["Blah", 68]}
