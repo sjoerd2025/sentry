@@ -1,16 +1,17 @@
 import hashlib
 import hmac
 import logging
+import typing
 from collections.abc import Callable
 from typing import Any
 
+import pydantic
 import sentry_sdk
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.exceptions import (
     AuthenticationFailed,
     NotFound,
-    ParseError,
     PermissionDenied,
     ValidationError,
 )
@@ -107,6 +108,22 @@ def get_signature_validation_error(url: str, body: bytes, signature: str) -> str
     return "wrong secret"
 
 
+class RequestData(pydantic.BaseModel, extra=pydantic.Extra.allow):
+    class Args(pydantic.BaseModel, extra=pydantic.Extra.allow):
+        organization_id: int
+
+        class CompositeRepositoryId(pydantic.BaseModel, extra=pydantic.Extra.forbid):
+            provider: str
+            external_id: str
+
+        repository_id: int | CompositeRepositoryId
+
+        def get_extra_fields(self) -> dict[str, Any]:
+            return {k: v for k, v in self.__dict__.items() if k not in self.__fields__}
+
+    args: Args
+
+
 @internal_region_silo_endpoint
 class ScmRpcServiceEndpoint(Endpoint):
     """
@@ -133,32 +150,32 @@ class ScmRpcServiceEndpoint(Endpoint):
 
     @staticmethod
     @sentry_sdk.trace
-    def _dispatch_to_source_code_manager(method_name: str, arguments: dict[str, Any]) -> Any:
+    def _dispatch_to_source_code_manager(method_name: str, raw_request_data: dict[str, Any]) -> Any:
         method = scm_method_registry.get(method_name)
         if method is None:
             raise NotFound(f"Unknown RPC method {method_name!r}")
 
-        organization_id = arguments.pop("organization_id", None)
-        if not isinstance(organization_id, int):
-            raise ValidationError("Argument 'organization_id' must be an integer")
+        try:
+            request = RequestData.parse_obj(raw_request_data)
+        except pydantic.ValidationError as ex:
+            # 'typing.cast' required because Pydantic V1 still uses typing_extensions.TypeDict, which MyPy does not recognize as a dict.
+            raise ValidationError(typing.cast(list[dict[str, Any]], ex.errors())) from ex
 
-        repository_id = arguments.pop("repository_id", None)
-        if isinstance(repository_id, dict) and len(repository_id) == 2:
-            repository_id = (repository_id.get("provider"), repository_id.get("external_id"))
-            repository_id_type_is_correct = isinstance(repository_id[0], str) and isinstance(
-                repository_id[1], str
+        organization_id = request.args.organization_id
+
+        repository_id: int | tuple[str, str]
+        if isinstance(request.args.repository_id, RequestData.Args.CompositeRepositoryId):
+            repository_id = (
+                request.args.repository_id.provider,
+                request.args.repository_id.external_id,
             )
         else:
-            repository_id_type_is_correct = isinstance(repository_id, int)
-        if not repository_id_type_is_correct:
-            raise ValidationError(
-                'Argument \'repository_id\' must be an integer or a dict {"provider": string, "external_id": string}'
-            )
+            repository_id = request.args.repository_id
 
         scm = SourceCodeManager.make_from_repository_id(organization_id, repository_id)
 
         try:
-            return method(scm, **arguments)
+            return method(scm, **request.args.get_extra_fields())
         except TypeError as e:
             raise ValidationError(f"Error calling method {method_name}: {str(e)}") from e
 
@@ -169,17 +186,8 @@ class ScmRpcServiceEndpoint(Endpoint):
         if not self._is_authorized(request):
             raise PermissionDenied()
 
-        if not isinstance(request.data, dict):
-            raise ParseError("Request body must be a JSON object")
         try:
-            arguments: dict[str, Any] = request.data["args"]
-        except KeyError as e:
-            raise ParseError("Missing 'args' in request body") from e
-        if not isinstance(arguments, dict):
-            raise ParseError("Argument 'args' must be a dictionary")
-
-        try:
-            result = self._dispatch_to_source_code_manager(method_name, arguments)
+            result = self._dispatch_to_source_code_manager(method_name, request.data)
         except SCMCodedError as e:
             sentry_sdk.capture_exception()
             return Response(data={"error": e.args}, status=400)
