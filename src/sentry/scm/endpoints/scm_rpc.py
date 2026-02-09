@@ -67,7 +67,13 @@ class ScmRpcSignatureAuthentication(StandardAuthentication):
         )
         if signature_validation_error:
             raise AuthenticationFailed(
-                f"SCM RPC signature validation failed: {signature_validation_error}"
+                {
+                    "errors": [
+                        {
+                            "details": f"SCM RPC signature validation failed: {signature_validation_error}"
+                        }
+                    ]
+                }
             )
 
         sentry_sdk.get_isolation_scope().set_tag("scm_rpc_auth", True)
@@ -153,13 +159,15 @@ class ScmRpcServiceEndpoint(Endpoint):
     def _dispatch_to_source_code_manager(method_name: str, raw_request_data: dict[str, Any]) -> Any:
         method = scm_method_registry.get(method_name)
         if method is None:
-            raise NotFound(f"Unknown RPC method {method_name!r}")
+            raise NotFound({"errors": [{"details": f"Unknown RPC method {method_name!r}"}]})
 
         try:
             request = RequestData.parse_obj(raw_request_data)
         except pydantic.ValidationError as ex:
             # 'typing.cast' required because Pydantic V1 still uses typing_extensions.TypeDict, which MyPy does not recognize as a dict.
-            raise ValidationError(typing.cast(list[dict[str, Any]], ex.errors())) from ex
+            raise ValidationError(
+                {"errors": typing.cast(list[dict[str, Any]], ex.errors())}
+            ) from ex
 
         organization_id = request.args.organization_id
 
@@ -177,7 +185,9 @@ class ScmRpcServiceEndpoint(Endpoint):
         try:
             return method(scm, **request.args.get_extra_fields())
         except TypeError as e:
-            raise ValidationError(f"Error calling method {method_name}: {str(e)}") from e
+            raise ValidationError(
+                {"errors": [{"details": f"Error calling method {method_name}: {str(e)}"}]}
+            ) from e
 
     @sentry_sdk.trace
     def post(self, request: Request, method_name: str) -> Response:
@@ -190,18 +200,18 @@ class ScmRpcServiceEndpoint(Endpoint):
             result = self._dispatch_to_source_code_manager(method_name, request.data)
         except SCMCodedError as e:
             sentry_sdk.capture_exception()
-            return Response(data={"error": e.args}, status=400)
+            return Response(data={"errors": [{"details": e.args}]}, status=400)
         except SCMProviderException as e:
             sentry_sdk.capture_exception()
-            return Response(data={"error": e.args}, status=503)
+            return Response(data={"errors": [{"details": e.args}]}, status=503)
         except SCMError as e:
             sentry_sdk.capture_exception()
-            return Response(data={"error": e.args}, status=500)
+            return Response(data={"errors": [{"details": e.args}]}, status=500)
         except Exception:
             sentry_sdk.capture_exception()
             raise
         else:
-            return Response(data=result)
+            return Response(data={"data": result})
 
 
 scm_method_registry: dict[str, Callable] = {

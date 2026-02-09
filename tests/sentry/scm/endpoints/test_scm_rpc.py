@@ -65,7 +65,7 @@ class TestScmRpc(APITestCase):
             )
             assert response.status_code == 200
             assert response.json() == {
-                "message": "Hello, World! You are from organization 42 and repository 57."
+                "data": {"message": "Hello, World! You are from organization 42 and repository 57."}
             }
 
     def test_no_authorization_header(self) -> None:
@@ -73,6 +73,7 @@ class TestScmRpc(APITestCase):
         data = {"args": {"name": "World", "organization_id": 42, "repository_id": 57}}
         response = self.client.post(path, data=data)
         assert response.status_code == 403
+        # Response body is built by DRF before we can format it as {"errors": [{"details": ...}]}
         assert response.json() == {"detail": "You do not have permission to perform this action."}
 
     def test_wrong_name_in_authorization_header(self) -> None:
@@ -92,7 +93,7 @@ class TestScmRpc(APITestCase):
         response = self.client.post(path, data=data, HTTP_AUTHORIZATION="rpcsignature rpc42:foobar")
         assert response.status_code == 401
         assert response.json() == {
-            "detail": "SCM RPC signature validation failed: invalid signature prefix"
+            "errors": [{"details": "SCM RPC signature validation failed: invalid signature prefix"}]
         }
 
     def test_wrong_signature_in_authorization_header(self) -> None:
@@ -102,7 +103,9 @@ class TestScmRpc(APITestCase):
             path, data=data, HTTP_AUTHORIZATION="rpcsignature rpc0:wrong-signature"
         )
         assert response.status_code == 401
-        assert response.json() == {"detail": "SCM RPC signature validation failed: wrong secret"}
+        assert response.json() == {
+            "errors": [{"details": "SCM RPC signature validation failed: wrong secret"}]
+        }
 
     def test_signature_with_more_colons_in_authorization_header(self) -> None:
         path = reverse("sentry-api-0-scm-rpc-service", kwargs={"method_name": "say_hello"})
@@ -111,7 +114,9 @@ class TestScmRpc(APITestCase):
             path, data=data, HTTP_AUTHORIZATION="rpcsignature rpc0:signature:with:colons"
         )
         assert response.status_code == 401
-        assert response.json() == {"detail": "SCM RPC signature validation failed: wrong secret"}
+        assert response.json() == {
+            "errors": [{"details": "SCM RPC signature validation failed: wrong secret"}]
+        }
 
     def test_signature_without_prefix_in_authorization_header(self) -> None:
         path = reverse("sentry-api-0-scm-rpc-service", kwargs={"method_name": "say_hello"})
@@ -121,24 +126,26 @@ class TestScmRpc(APITestCase):
         )
         assert response.status_code == 401
         assert response.json() == {
-            "detail": "SCM RPC signature validation failed: invalid signature format"
+            "errors": [{"details": "SCM RPC signature validation failed: invalid signature format"}]
         }
 
     def test_invalid_endpoint(self) -> None:
         response = self.call("not_a_method", {"args": {}})
         assert response.status_code == 404
-        assert response.json() == {"detail": "Unknown RPC method 'not_a_method'"}
+        assert response.json() == {"errors": [{"details": "Unknown RPC method 'not_a_method'"}]}
 
     def test_no_organization_id(self) -> None:
         response = self.call("get_issue_comments", {"args": {"repository_id": 57}, "meta": {}})
         assert response.status_code == 400
-        assert response.json() == [
-            {
-                "loc": ["args", "organization_id"],
-                "msg": "field required",
-                "type": "value_error.missing",
-            }
-        ]
+        assert response.json() == {
+            "errors": [
+                {
+                    "loc": ["args", "organization_id"],
+                    "msg": "field required",
+                    "type": "value_error.missing",
+                }
+            ]
+        }
 
     def test_string_as_organization_id(self) -> None:
         response = self.call(
@@ -146,24 +153,28 @@ class TestScmRpc(APITestCase):
             {"args": {"organization_id": "invalid", "repository_id": 57}, "meta": {}},
         )
         assert response.status_code == 400
-        assert response.json() == [
-            {
-                "loc": ["args", "organization_id"],
-                "msg": "value is not a valid integer",
-                "type": "type_error.integer",
-            }
-        ]
+        assert response.json() == {
+            "errors": [
+                {
+                    "loc": ["args", "organization_id"],
+                    "msg": "value is not a valid integer",
+                    "type": "type_error.integer",
+                }
+            ]
+        }
 
     def test_no_repository_id(self) -> None:
         response = self.call("get_issue_comments", {"args": {"organization_id": 42}, "meta": {}})
         assert response.status_code == 400
-        assert response.json() == [
-            {
-                "loc": ["args", "repository_id"],
-                "msg": "field required",
-                "type": "value_error.missing",
-            }
-        ]
+        assert response.json() == {
+            "errors": [
+                {
+                    "loc": ["args", "repository_id"],
+                    "msg": "field required",
+                    "type": "value_error.missing",
+                }
+            ]
+        }
 
     def test_string_as_repository_id(self) -> None:
         response = self.call(
@@ -171,18 +182,20 @@ class TestScmRpc(APITestCase):
             {"args": {"organization_id": 42, "repository_id": "invalid"}, "meta": {}},
         )
         assert response.status_code == 400
-        assert response.json() == [
-            {
-                "loc": ["args", "repository_id"],
-                "msg": "value is not a valid integer",
-                "type": "type_error.integer",
-            },
-            {
-                "loc": ["args", "repository_id"],
-                "msg": "value is not a valid dict",
-                "type": "type_error.dict",
-            },
-        ]
+        assert response.json() == {
+            "errors": [
+                {
+                    "loc": ["args", "repository_id"],
+                    "msg": "value is not a valid integer",
+                    "type": "type_error.integer",
+                },
+                {
+                    "loc": ["args", "repository_id"],
+                    "msg": "value is not a valid dict",
+                    "type": "type_error.dict",
+                },
+            ]
+        }
 
     def test_dict_with_missing_provider_as_repository_id(self) -> None:
         response = self.call(
@@ -193,18 +206,20 @@ class TestScmRpc(APITestCase):
             },
         )
         assert response.status_code == 400
-        assert response.json() == [
-            {
-                "loc": ["args", "repository_id"],
-                "msg": "value is not a valid integer",
-                "type": "type_error.integer",
-            },
-            {
-                "loc": ["args", "repository_id", "provider"],
-                "msg": "field required",
-                "type": "value_error.missing",
-            },
-        ]
+        assert response.json() == {
+            "errors": [
+                {
+                    "loc": ["args", "repository_id"],
+                    "msg": "value is not a valid integer",
+                    "type": "type_error.integer",
+                },
+                {
+                    "loc": ["args", "repository_id", "provider"],
+                    "msg": "field required",
+                    "type": "value_error.missing",
+                },
+            ]
+        }
 
     def test_dict_with_missing_external_id_as_repository_id(self) -> None:
         response = self.call(
@@ -212,18 +227,20 @@ class TestScmRpc(APITestCase):
             {"args": {"organization_id": 42, "repository_id": {"provider": "github"}}, "meta": {}},
         )
         assert response.status_code == 400
-        assert response.json() == [
-            {
-                "loc": ["args", "repository_id"],
-                "msg": "value is not a valid integer",
-                "type": "type_error.integer",
-            },
-            {
-                "loc": ["args", "repository_id", "external_id"],
-                "msg": "field required",
-                "type": "value_error.missing",
-            },
-        ]
+        assert response.json() == {
+            "errors": [
+                {
+                    "loc": ["args", "repository_id"],
+                    "msg": "value is not a valid integer",
+                    "type": "type_error.integer",
+                },
+                {
+                    "loc": ["args", "repository_id", "external_id"],
+                    "msg": "field required",
+                    "type": "value_error.missing",
+                },
+            ]
+        }
 
     def test_dict_with_extra_attribute_as_repository_id(self) -> None:
         response = self.call(
@@ -241,18 +258,20 @@ class TestScmRpc(APITestCase):
             },
         )
         assert response.status_code == 400
-        assert response.json() == [
-            {
-                "loc": ["args", "repository_id"],
-                "msg": "value is not a valid integer",
-                "type": "type_error.integer",
-            },
-            {
-                "loc": ["args", "repository_id", "extra"],
-                "msg": "extra fields not permitted",
-                "type": "value_error.extra",
-            },
-        ]
+        assert response.json() == {
+            "errors": [
+                {
+                    "loc": ["args", "repository_id"],
+                    "msg": "value is not a valid integer",
+                    "type": "type_error.integer",
+                },
+                {
+                    "loc": ["args", "repository_id", "extra"],
+                    "msg": "extra fields not permitted",
+                    "type": "value_error.extra",
+                },
+            ]
+        }
 
     def test_correct_dict_as_repository_id(self) -> None:
         with add_say_hello():
@@ -269,7 +288,9 @@ class TestScmRpc(APITestCase):
             )
             assert response.status_code == 200
             assert response.json() == {
-                "message": "Hello, Vincent! You are from organization 57 and repository ('github', 'repo1')."
+                "data": {
+                    "message": "Hello, Vincent! You are from organization 57 and repository ('github', 'repo1')."
+                }
             }
 
     def test_missing_method_argument(self) -> None:
@@ -278,9 +299,13 @@ class TestScmRpc(APITestCase):
                 "say_hello", {"args": {"organization_id": 42, "repository_id": 57}, "meta": {}}
             )
             assert response.status_code == 400
-            assert response.json() == [
-                "Error calling method say_hello: add_say_hello.<locals>.say_hello() missing 1 required keyword-only argument: 'name'"
-            ]
+            assert response.json() == {
+                "errors": [
+                    {
+                        "details": "Error calling method say_hello: add_say_hello.<locals>.say_hello() missing 1 required keyword-only argument: 'name'"
+                    }
+                ]
+            }
 
     def test_extra_method_argument(self) -> None:
         with add_say_hello():
@@ -297,9 +322,13 @@ class TestScmRpc(APITestCase):
                 },
             )
             assert response.status_code == 400
-            assert response.json() == [
-                "Error calling method say_hello: add_say_hello.<locals>.say_hello() got an unexpected keyword argument 'login'"
-            ]
+            assert response.json() == {
+                "errors": [
+                    {
+                        "details": "Error calling method say_hello: add_say_hello.<locals>.say_hello() got an unexpected keyword argument 'login'"
+                    }
+                ]
+            }
 
     def test_misspelled_method_argument(self) -> None:
         with add_say_hello():
@@ -308,42 +337,52 @@ class TestScmRpc(APITestCase):
                 {"args": {"organization_id": 42, "repository_id": 57, "fame": "World"}, "meta": {}},
             )
             assert response.status_code == 400
-            assert response.json() == [
-                "Error calling method say_hello: add_say_hello.<locals>.say_hello() got an unexpected keyword argument 'fame'. Did you mean 'name'?"
-            ]
+            assert response.json() == {
+                "errors": [
+                    {
+                        "details": "Error calling method say_hello: add_say_hello.<locals>.say_hello() got an unexpected keyword argument 'fame'. Did you mean 'name'?"
+                    }
+                ]
+            }
 
     def test_list_as_data(self) -> None:
         with add_say_hello():
             response = self.call("say_hello", [])
             assert response.status_code == 400
-            assert response.json() == [
-                {"loc": ["args"], "msg": "field required", "type": "value_error.missing"}
-            ]
+            assert response.json() == {
+                "errors": [
+                    {"loc": ["args"], "msg": "field required", "type": "value_error.missing"}
+                ]
+            }
 
     def test_empty_dict_as_data(self) -> None:
         with add_say_hello():
             response = self.call("say_hello", {})
             assert response.status_code == 400
-            assert response.json() == [
-                {"loc": ["args"], "msg": "field required", "type": "value_error.missing"}
-            ]
+            assert response.json() == {
+                "errors": [
+                    {"loc": ["args"], "msg": "field required", "type": "value_error.missing"}
+                ]
+            }
 
     def test_list_as_args(self) -> None:
         with add_say_hello():
             response = self.call("say_hello", {"args": []})
             assert response.status_code == 400
-            assert response.json() == [
-                {
-                    "loc": ["args", "organization_id"],
-                    "msg": "field required",
-                    "type": "value_error.missing",
-                },
-                {
-                    "loc": ["args", "repository_id"],
-                    "msg": "field required",
-                    "type": "value_error.missing",
-                },
-            ]
+            assert response.json() == {
+                "errors": [
+                    {
+                        "loc": ["args", "organization_id"],
+                        "msg": "field required",
+                        "type": "value_error.missing",
+                    },
+                    {
+                        "loc": ["args", "repository_id"],
+                        "msg": "field required",
+                        "type": "value_error.missing",
+                    },
+                ]
+            }
 
     def test_scm_error_in_provider_method(self) -> None:
         with add_raise_scm_error(SCMUnhandledException("Blah", 68)):
@@ -352,7 +391,7 @@ class TestScmRpc(APITestCase):
                 {"args": {"organization_id": 42, "repository_id": 57}},
             )
             assert response.status_code == 500
-            assert response.json() == {"error": ["Blah", 68]}
+            assert response.json() == {"errors": [{"details": ["Blah", 68]}]}
 
     def test_scm_coded_error_in_provider_method(self) -> None:
         with add_raise_scm_error(SCMCodedError("Blah", 68, code="repository_not_found")):
@@ -362,7 +401,16 @@ class TestScmRpc(APITestCase):
             )
             assert response.status_code == 400
             assert response.json() == {
-                "error": ["repository_not_found", "A repository could not be found.", "Blah", 68]
+                "errors": [
+                    {
+                        "details": [
+                            "repository_not_found",
+                            "A repository could not be found.",
+                            "Blah",
+                            68,
+                        ]
+                    }
+                ]
             }
 
     def test_scm_provider_exception_in_provider_method(self) -> None:
@@ -372,4 +420,4 @@ class TestScmRpc(APITestCase):
                 {"args": {"organization_id": 42, "repository_id": 57}},
             )
             assert response.status_code == 503
-            assert response.json() == {"error": ["Blah", 68]}
+            assert response.json() == {"errors": [{"details": ["Blah", 68]}]}
