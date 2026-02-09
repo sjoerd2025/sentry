@@ -1,11 +1,13 @@
 from collections.abc import Callable
 
 from sentry import ratelimits
+from sentry.constants import ObjectStatus
+from sentry.integrations.base import IntegrationInstallation
 from sentry.integrations.models.integration import Integration
 from sentry.integrations.services.integration.model import RpcIntegration
 from sentry.integrations.services.integration.service import integration_service
 from sentry.models.repository import Repository as RepositoryModel
-from sentry.scm.errors import SCMCodedError
+from sentry.scm.errors import SCMCodedError, SCMError, SCMUnhandledException
 from sentry.scm.private.providers.github import GitHubProvider
 from sentry.scm.types import ExternalId, Provider, ProviderName, Referrer, Repository, RepositoryId
 
@@ -31,17 +33,21 @@ def is_rate_limited_with_allocation_policy(
 ) -> bool:
     # Check if the referrer has reserved quota they have exclusive access to.
     if referrer in allocation_policy:
-        has_allocated_space = is_rate_limited(
+        is_allocation_exhausted = is_rate_limited(
             organization_id,
             referrer,
             provider,
             limit=allocation_policy[referrer],
             window=window,
         )
-        if has_allocated_space:
+        if is_allocation_exhausted:
             return True
 
     # Check if the shared pool has quota.
+    # NOTE: This currently uses the same referrer key as the allocation check above, so for
+    # referrers with an allocation smaller than the shared limit this check is effectively
+    # unreachable. This is placeholder behavior until dynamic per-org rate limits are
+    # implemented (see TODO in github.py REFERRER_ALLOCATION).
     return is_rate_limited(
         organization_id,
         referrer,
@@ -54,8 +60,11 @@ def is_rate_limited_with_allocation_policy(
 def map_integration_to_provider(
     organization_id: int,
     integration: Integration | RpcIntegration,
+    get_installation: Callable[
+        [Integration | RpcIntegration, int], IntegrationInstallation
+    ] = lambda i, oid: i.get_installation(organization_id=oid),
 ) -> Provider:
-    client = integration.get_installation(organization_id=organization_id).get_client()
+    client = get_installation(integration, organization_id).get_client()
 
     if integration.provider == "github":
         return GitHubProvider(client)
@@ -72,7 +81,13 @@ def map_repository_model_to_repository(repository: RepositoryModel) -> Repositor
     }
 
 
-def fetch_service_provider(organization_id: int, integration_id: int) -> Provider:
+def fetch_service_provider(
+    organization_id: int,
+    integration_id: int,
+    map_to_provider: Callable[
+        [Integration | RpcIntegration, int], Provider
+    ] = lambda i, oid: map_integration_to_provider(oid, i),
+) -> Provider:
     integration = integration_service.get_integration(
         integration_id=integration_id,
         organization_id=organization_id,
@@ -80,7 +95,7 @@ def fetch_service_provider(organization_id: int, integration_id: int) -> Provide
     if not integration:
         raise SCMCodedError(code="integration_not_found")
 
-    return map_integration_to_provider(organization_id, integration)
+    return map_to_provider(integration, organization_id)
 
 
 def fetch_repository(
@@ -113,7 +128,7 @@ def exec_provider_fn[T](
     repository = fetch_repository(organization_id, repository_id)
     if not repository:
         raise SCMCodedError(organization_id, repository_id, code="repository_not_found")
-    if repository["status"] != "active":
+    if repository["status"] != ObjectStatus.ACTIVE:
         raise SCMCodedError(repository, code="repository_inactive")
     if repository["organization_id"] != organization_id:
         raise SCMCodedError(repository, code="repository_organization_mismatch")
@@ -122,4 +137,9 @@ def exec_provider_fn[T](
     if provider.is_rate_limited(organization_id, referrer):
         raise SCMCodedError(provider, organization_id, referrer, code="rate_limit_exceeded")
 
-    return provider_fn(repository, provider)
+    try:
+        return provider_fn(repository, provider)
+    except SCMError:
+        raise
+    except Exception as e:
+        raise SCMUnhandledException from e

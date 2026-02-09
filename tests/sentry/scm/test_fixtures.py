@@ -1,7 +1,19 @@
 from typing import Any
+from unittest.mock import MagicMock
 
-from sentry.integrations.github.client import GitHubReaction
-from sentry.scm.types import Comment, Provider, PullRequest, Reaction, Referrer, Repository
+from sentry.integrations.github.client import GitHubApiClient, GitHubReaction
+from sentry.integrations.models import Integration
+from sentry.scm.types import (
+    Comment,
+    CommentActionResult,
+    Provider,
+    PullRequest,
+    PullRequestActionResult,
+    Reaction,
+    ReactionResult,
+    Referrer,
+    Repository,
+)
 from sentry.shared_integrations.exceptions import ApiError
 
 
@@ -64,35 +76,33 @@ class BaseTestProvider(Provider):
 
     # Pull request
 
-    def get_pull_request(self, repository: Repository, pull_request_id: str) -> PullRequest:
+    def get_pull_request(
+        self, repository: Repository, pull_request_id: str
+    ) -> PullRequestActionResult:
         raw: dict[str, Any] = {
-            "id": 1,
-            "title": "Test PR",
-            "body": None,
-            "head": {"ref": "feature", "sha": "abc123"},
-            "base": {"ref": "main", "sha": "def456"},
-            "user": {"id": 1, "login": "testuser"},
+            "head": {"sha": "abc123"},
         }
-        return PullRequest(
-            id=str(raw["id"]),
-            title=raw["title"],
-            description=raw["body"],
-            head={"name": raw["head"]["ref"], "sha": raw["head"]["sha"]},
-            base={"name": raw["base"]["ref"], "sha": raw["base"]["sha"]},
-            author={"id": str(raw["user"]["id"]), "username": raw["user"]["login"]},
+        return PullRequestActionResult(
+            pull_request=PullRequest(
+                head={"sha": raw["head"]["sha"]},
+            ),
+            provider="test",
             raw=raw,
         )
 
     # Issue comments
 
-    def get_issue_comments(self, repository: Repository, issue_id: str) -> list[Comment]:
+    def get_issue_comments(
+        self, repository: Repository, issue_id: str
+    ) -> list[CommentActionResult]:
         return [
-            Comment(
-                id="101",
-                body="Test comment",
-                author={"id": "1", "username": "testuser"},
-                created_at="2024-01-01T00:00:00Z",
-                updated_at="2024-01-01T00:00:00Z",
+            CommentActionResult(
+                comment=Comment(
+                    id="101",
+                    body="Test comment",
+                    author={"id": "1", "username": "testuser"},
+                ),
+                provider="test",
                 raw={},
             )
         ]
@@ -107,14 +117,15 @@ class BaseTestProvider(Provider):
 
     def get_pull_request_comments(
         self, repository: Repository, pull_request_id: str
-    ) -> list[Comment]:
+    ) -> list[CommentActionResult]:
         return [
-            Comment(
-                id="201",
-                body="PR review comment",
-                author={"id": "2", "username": "reviewer"},
-                created_at="2024-01-02T00:00:00Z",
-                updated_at="2024-01-02T00:00:00Z",
+            CommentActionResult(
+                comment=Comment(
+                    id="201",
+                    body="PR review comment",
+                    author={"id": "2", "username": "reviewer"},
+                ),
+                provider="test",
                 raw={},
             )
         ]
@@ -127,25 +138,53 @@ class BaseTestProvider(Provider):
     def delete_pull_request_comment(self, repository: Repository, comment_id: str) -> None:
         return None
 
-    # Comment reactions
+    # Issue comment reactions
 
-    def get_comment_reactions(self, repository: Repository, comment_id: str) -> list[Reaction]:
-        return ["+1", "eyes"]
+    def get_issue_comment_reactions(
+        self, repository: Repository, comment_id: str
+    ) -> list[ReactionResult]:
+        return [
+            ReactionResult(id="1", content="+1", author={"id": "1", "username": "testuser"}),
+            ReactionResult(id="2", content="eyes", author={"id": "2", "username": "otheruser"}),
+        ]
 
-    def create_comment_reaction(
+    def create_issue_comment_reaction(
         self, repository: Repository, comment_id: str, reaction: Reaction
     ) -> None:
         return None
 
-    def delete_comment_reaction(
+    def delete_issue_comment_reaction(
+        self, repository: Repository, comment_id: str, reaction_id: str
+    ) -> None:
+        return None
+
+    # Pull request comment reactions
+
+    def get_pull_request_comment_reactions(
+        self, repository: Repository, comment_id: str
+    ) -> list[ReactionResult]:
+        return [
+            ReactionResult(id="3", content="rocket", author={"id": "1", "username": "testuser"}),
+            ReactionResult(id="4", content="hooray", author={"id": "2", "username": "otheruser"}),
+        ]
+
+    def create_pull_request_comment_reaction(
+        self, repository: Repository, comment_id: str, reaction: Reaction
+    ) -> None:
+        return None
+
+    def delete_pull_request_comment_reaction(
         self, repository: Repository, comment_id: str, reaction_id: str
     ) -> None:
         return None
 
     # Issue reactions
 
-    def get_issue_reactions(self, repository: Repository, issue_id: str) -> list[Reaction]:
-        return ["+1", "heart"]
+    def get_issue_reactions(self, repository: Repository, issue_id: str) -> list[ReactionResult]:
+        return [
+            ReactionResult(id="1", content="+1", author={"id": "1", "username": "testuser"}),
+            ReactionResult(id="2", content="heart", author={"id": "2", "username": "otheruser"}),
+        ]
 
     def create_issue_reaction(
         self, repository: Repository, issue_id: str, reaction: Reaction
@@ -157,8 +196,28 @@ class BaseTestProvider(Provider):
     ) -> None:
         return None
 
+    # Pull request reactions
 
-class FakeGitHubApiClient:
+    def get_pull_request_reactions(
+        self, repository: Repository, pull_request_id: str
+    ) -> list[ReactionResult]:
+        return [
+            ReactionResult(id="5", content="laugh", author={"id": "1", "username": "testuser"}),
+            ReactionResult(id="6", content="confused", author={"id": "2", "username": "otheruser"}),
+        ]
+
+    def create_pull_request_reaction(
+        self, repository: Repository, pull_request_id: str, reaction: Reaction
+    ) -> None:
+        return None
+
+    def delete_pull_request_reaction(
+        self, repository: Repository, pull_request_id: str, reaction_id: str
+    ) -> None:
+        return None
+
+
+class FakeGitHubApiClient(GitHubApiClient):
     """
     A fake GitHubApiClient for testing GitHubProvider without HTTP mocking.
 
@@ -167,6 +226,7 @@ class FakeGitHubApiClient:
     """
 
     def __init__(self) -> None:
+        super().__init__(integration=MagicMock(spec=Integration))
         self.issue_comments: list[dict[str, Any]] = []
         self.pull_request_comments: list[dict[str, Any]] = []
         self.pull_request_data: dict[str, Any] | None = None
@@ -207,6 +267,14 @@ class FakeGitHubApiClient:
 
     def delete(self, path: str) -> None:
         self._record_call("delete", path)
+        self._maybe_raise()
+
+    def delete_issue_comment(self, repo: str, comment_id: str) -> None:
+        self._record_call("delete_issue_comment", repo, comment_id)
+        self._maybe_raise()
+
+    def delete_comment_reaction(self, repo: str, comment_id: str, reaction_id: str) -> None:
+        self._record_call("delete_comment_reaction", repo, comment_id, reaction_id)
         self._maybe_raise()
 
     def get_comment_reactions(self, repo: str, comment_id: str) -> list[dict[str, Any]]:
