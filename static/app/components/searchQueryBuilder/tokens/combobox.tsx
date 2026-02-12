@@ -673,7 +673,9 @@ const ListBoxOverlay = styled(Overlay)`
   min-width: 200px;
   width: 600px;
   max-width: fit-content;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 `;
 
 const DescriptionOverlay = styled(Overlay)`
