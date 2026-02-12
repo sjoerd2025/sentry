@@ -135,7 +135,7 @@ class TestScmRpc(APITestCase):
         assert response.json() == {"errors": [{"details": "Unknown RPC method 'not_a_method'"}]}
 
     def test_no_organization_id(self) -> None:
-        response = self.call("get_issue_comments", {"args": {"repository_id": 57}, "meta": {}})
+        response = self.call("get_issue_comments_v1", {"args": {"repository_id": 57}, "meta": {}})
         assert response.status_code == 400
         assert response.json() == {
             "errors": [
@@ -149,7 +149,7 @@ class TestScmRpc(APITestCase):
 
     def test_string_as_organization_id(self) -> None:
         response = self.call(
-            "get_issue_comments",
+            "get_issue_comments_v1",
             {"args": {"organization_id": "invalid", "repository_id": 57}, "meta": {}},
         )
         assert response.status_code == 400
@@ -164,7 +164,7 @@ class TestScmRpc(APITestCase):
         }
 
     def test_no_repository_id(self) -> None:
-        response = self.call("get_issue_comments", {"args": {"organization_id": 42}, "meta": {}})
+        response = self.call("get_issue_comments_v1", {"args": {"organization_id": 42}, "meta": {}})
         assert response.status_code == 400
         assert response.json() == {
             "errors": [
@@ -178,7 +178,7 @@ class TestScmRpc(APITestCase):
 
     def test_string_as_repository_id(self) -> None:
         response = self.call(
-            "get_issue_comments",
+            "get_issue_comments_v1",
             {"args": {"organization_id": 42, "repository_id": "invalid"}, "meta": {}},
         )
         assert response.status_code == 400
@@ -199,7 +199,7 @@ class TestScmRpc(APITestCase):
 
     def test_dict_with_missing_provider_as_repository_id(self) -> None:
         response = self.call(
-            "get_issue_comments",
+            "get_issue_comments_v1",
             {
                 "args": {"organization_id": 42, "repository_id": {"external_id": "repo1"}},
                 "meta": {},
@@ -223,7 +223,7 @@ class TestScmRpc(APITestCase):
 
     def test_dict_with_missing_external_id_as_repository_id(self) -> None:
         response = self.call(
-            "get_issue_comments",
+            "get_issue_comments_v1",
             {"args": {"organization_id": 42, "repository_id": {"provider": "github"}}, "meta": {}},
         )
         assert response.status_code == 400
@@ -244,7 +244,7 @@ class TestScmRpc(APITestCase):
 
     def test_dict_with_extra_attribute_as_repository_id(self) -> None:
         response = self.call(
-            "get_issue_comments",
+            "get_issue_comments_v1",
             {
                 "args": {
                     "organization_id": 42,
