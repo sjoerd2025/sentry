@@ -32,7 +32,7 @@ def is_rate_limited_with_allocation_policy(
     allocation_policy: dict[Referrer, int],
 ) -> bool:
     # Check if the referrer has reserved quota they have exclusive access to.
-    if referrer in allocation_policy:
+    if referrer != "shared" and referrer in allocation_policy:
         is_allocation_exhausted = is_rate_limited(
             organization_id,
             referrer,
@@ -40,17 +40,13 @@ def is_rate_limited_with_allocation_policy(
             limit=allocation_policy[referrer],
             window=window,
         )
-        if is_allocation_exhausted:
-            return True
+        if not is_allocation_exhausted:
+            return False
 
     # Check if the shared pool has quota.
-    # NOTE: This currently uses the same referrer key as the allocation check above, so for
-    # referrers with an allocation smaller than the shared limit this check is effectively
-    # unreachable. This is placeholder behavior until dynamic per-org rate limits are
-    # implemented (see TODO in github.py REFERRER_ALLOCATION).
     return is_rate_limited(
         organization_id,
-        referrer,
+        "shared",
         provider,
         limit=allocation_policy["shared"],
         window=window,

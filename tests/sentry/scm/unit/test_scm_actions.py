@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any
 
@@ -26,7 +27,7 @@ def fetch_repository(oid, rid) -> Repository:
     }
 
 
-ALL_ACTIONS = (
+ALL_ACTIONS: tuple[tuple[str, dict[str, Any]], ...] = (
     # Issue comments
     ("get_issue_comments", {"issue_id": "1"}),
     ("create_issue_comment", {"issue_id": "1", "body": "test"}),
@@ -53,6 +54,57 @@ ALL_ACTIONS = (
     ("get_pull_request_reactions", {"pull_request_id": "1"}),
     ("create_pull_request_reaction", {"pull_request_id": "1", "reaction": "eyes"}),
     ("delete_pull_request_reaction", {"pull_request_id": "1", "reaction_id": "456"}),
+    # Branch operations
+    ("get_branch", {"branch": "main"}),
+    ("create_branch", {"branch": "feature", "sha": "abc123"}),
+    ("update_branch", {"branch": "feature", "sha": "def456"}),
+    # Git blob operations
+    ("create_git_blob", {"content": "hello", "encoding": "utf-8"}),
+    # File content operations
+    ("get_file_content", {"path": "README.md"}),
+    # Commit operations
+    ("get_commit", {"sha": "abc123"}),
+    ("get_commits", {}),
+    ("compare_commits", {"start_sha": "aaa", "end_sha": "bbb"}),
+    # Git data operations
+    ("get_tree", {"tree_sha": "tree123"}),
+    ("get_git_commit", {"sha": "abc123"}),
+    ("create_git_tree", {"tree": [{"path": "f.py", "mode": "100644", "type": "blob", "sha": "x"}]}),
+    ("create_git_commit", {"message": "msg", "tree_sha": "t", "parent_shas": ["p"]}),
+    # Expanded pull request operations
+    ("get_pull_request_files", {"pull_request_id": "1"}),
+    ("get_pull_request_commits", {"pull_request_id": "1"}),
+    ("get_pull_request_diff", {"pull_request_id": "1"}),
+    ("list_pull_requests", {}),
+    ("create_pull_request", {"title": "T", "body": "B", "head": "h", "base": "b"}),
+    ("update_pull_request", {"pull_request_id": "1"}),
+    ("request_review", {"pull_request_id": "1", "reviewers": ["user1"]}),
+    # Review operations
+    (
+        "create_review_comment",
+        {
+            "pull_request_id": "1",
+            "body": "comment",
+            "commit_sha": "abc",
+            "path": "f.py",
+        },
+    ),
+    (
+        "create_review",
+        {
+            "pull_request_id": "1",
+            "commit_sha": "abc",
+            "event": "COMMENT",
+            "comments": [],
+        },
+    ),
+    # Check run operations
+    ("create_check_run", {"name": "check", "head_sha": "abc"}),
+    ("get_check_run", {"check_run_id": "300"}),
+    ("update_check_run", {"check_run_id": "300"}),
+    # GraphQL mutation operations
+    ("minimize_comment", {"comment_node_id": "IC_abc", "reason": "OUTDATED"}),
+    ("resolve_review_thread", {"thread_node_id": "PRT_abc"}),
 )
 
 
@@ -128,7 +180,13 @@ def _check_issue_comments(result: Any) -> None:
 
 def _check_pull_request(result: Any) -> None:
     pr = result["pull_request"]
+    assert pr["id"] == 42
+    assert pr["number"] == 1
+    assert pr["title"] == "Test PR"
     assert pr["head"]["sha"] == "abc123"
+    assert pr["head"]["ref"] == "feature-branch"
+    assert pr["base"]["sha"] == "def456"
+    assert result["provider"] == "test"
 
 
 def _check_pull_request_comments(result: Any) -> None:
@@ -174,11 +232,154 @@ def _check_pr_reactions(result: Any) -> None:
     assert result[1]["author"]["username"] == "otheruser"
 
 
+def _check_get_branch(result: Any) -> None:
+    assert result["git_ref"]["ref"] == "refs/heads/main"
+    assert result["git_ref"]["sha"] == "abc123def456"
+    assert result["provider"] == "test"
+
+
+def _check_create_branch(result: Any) -> None:
+    assert result["git_ref"]["ref"] == "refs/heads/feature"
+    assert result["git_ref"]["sha"] == "abc123"
+    assert result["provider"] == "test"
+
+
+def _check_create_git_blob(result: Any) -> None:
+    assert result["git_blob"]["sha"] == "blob123abc"
+    assert result["provider"] == "test"
+
+
+def _check_file_content(result: Any) -> None:
+    fc = result["file_content"]
+    assert fc["path"] == "README.md"
+    assert fc["content"] == "SGVsbG8gV29ybGQ="
+    assert fc["encoding"] == "base64"
+    assert result["provider"] == "test"
+
+
+def _check_get_commit(result: Any) -> None:
+    c = result["commit"]
+    assert c["sha"] == "abc123"
+    assert c["message"] == "Fix bug"
+    assert c["author"]["name"] == "Test User"
+    assert result["provider"] == "test"
+
+
+def _check_get_commits(result: Any) -> None:
+    assert len(result) == 1
+    assert result[0]["commit"]["sha"] == "abc123"
+    assert result[0]["provider"] == "test"
+
+
+def _check_compare_commits(result: Any) -> None:
+    assert result["comparison"]["ahead_by"] == 3
+    assert result["comparison"]["behind_by"] == 1
+    assert result["provider"] == "test"
+
+
+def _check_get_tree(result: Any) -> None:
+    gt = result["git_tree"]
+    assert len(gt["tree"]) == 1
+    assert gt["tree"][0]["path"] == "src/main.py"
+    assert gt["truncated"] is False
+    assert result["provider"] == "test"
+
+
+def _check_get_git_commit(result: Any) -> None:
+    gc = result["git_commit"]
+    assert gc["sha"] == "abc123"
+    assert gc["tree"]["sha"] == "tree456"
+    assert result["provider"] == "test"
+
+
+def _check_create_git_tree(result: Any) -> None:
+    gt = result["git_tree"]
+    assert len(gt["tree"]) == 1
+    assert result["provider"] == "test"
+
+
+def _check_create_git_commit(result: Any) -> None:
+    gc = result["git_commit"]
+    assert gc["sha"] == "newcommit123"
+    assert gc["message"] == "msg"
+    assert result["provider"] == "test"
+
+
+def _check_pr_files(result: Any) -> None:
+    assert len(result["files"]) == 1
+    assert result["files"][0]["filename"] == "src/main.py"
+    assert result["provider"] == "test"
+
+
+def _check_pr_commits(result: Any) -> None:
+    assert len(result["commits"]) == 1
+    assert result["commits"][0]["sha"] == "commit123"
+    assert result["commits"][0]["message"] == "Fix bug"
+    assert result["provider"] == "test"
+
+
+def _check_pr_diff(result: Any) -> None:
+    assert "diff --git" in result["diff"]
+    assert result["provider"] == "test"
+
+
+def _check_list_pull_requests(result: Any) -> None:
+    assert len(result) == 1
+    assert result[0]["pull_request"]["number"] == 1
+    assert result[0]["provider"] == "test"
+
+
+def _check_create_pull_request(result: Any) -> None:
+    pr = result["pull_request"]
+    assert pr["title"] == "T"
+    assert pr["body"] == "B"
+    assert result["provider"] == "test"
+
+
+def _check_update_pull_request(result: Any) -> None:
+    pr = result["pull_request"]
+    assert pr["title"] == "Test PR"
+    assert result["provider"] == "test"
+
+
 def _check_none(result: Any) -> None:
     assert result is None
 
 
-ACTION_TESTS = (
+def _check_review_comment(result: Any) -> None:
+    rc = result["review_comment"]
+    assert rc["id"] == 100
+    assert rc["path"] == "f.py"
+    assert rc["body"] == "comment"
+    assert result["provider"] == "test"
+
+
+def _check_review(result: Any) -> None:
+    r = result["review"]
+    assert r["id"] == 200
+    assert result["provider"] == "test"
+
+
+def _check_create_check_run(result: Any) -> None:
+    cr = result["check_run"]
+    assert cr["name"] == "check"
+    assert result["provider"] == "test"
+
+
+def _check_get_check_run(result: Any) -> None:
+    cr = result["check_run"]
+    assert cr["id"] == 300
+    assert cr["status"] == "completed"
+    assert result["provider"] == "test"
+
+
+def _check_update_check_run(result: Any) -> None:
+    cr = result["check_run"]
+    assert cr["id"] == 300
+    assert result["provider"] == "test"
+
+
+ACTION_TESTS: tuple[tuple[Callable[..., Any], dict[str, Any], Callable[..., Any]], ...] = (
     (SourceCodeManager.get_issue_comments, {"issue_id": "1"}, _check_issue_comments),
     (SourceCodeManager.create_issue_comment, {"issue_id": "1", "body": "test"}, _check_none),
     (SourceCodeManager.delete_issue_comment, {"comment_id": "1"}, _check_none),
@@ -236,6 +437,94 @@ ACTION_TESTS = (
     (
         SourceCodeManager.delete_pull_request_reaction,
         {"pull_request_id": "1", "reaction_id": "456"},
+        _check_none,
+    ),
+    (SourceCodeManager.get_branch, {"branch": "main"}, _check_get_branch),
+    (SourceCodeManager.create_branch, {"branch": "feature", "sha": "abc123"}, _check_create_branch),
+    (SourceCodeManager.update_branch, {"branch": "feature", "sha": "def456"}, _check_none),
+    (
+        SourceCodeManager.create_git_blob,
+        {"content": "hello", "encoding": "utf-8"},
+        _check_create_git_blob,
+    ),
+    (SourceCodeManager.get_file_content, {"path": "README.md"}, _check_file_content),
+    (SourceCodeManager.get_commit, {"sha": "abc123"}, _check_get_commit),
+    (SourceCodeManager.get_commits, {}, _check_get_commits),
+    (
+        SourceCodeManager.compare_commits,
+        {"start_sha": "aaa", "end_sha": "bbb"},
+        _check_compare_commits,
+    ),
+    (SourceCodeManager.get_tree, {"tree_sha": "tree123"}, _check_get_tree),
+    (SourceCodeManager.get_git_commit, {"sha": "abc123"}, _check_get_git_commit),
+    (
+        SourceCodeManager.create_git_tree,
+        {"tree": [{"path": "f.py", "mode": "100644", "type": "blob", "sha": "x"}]},
+        _check_create_git_tree,
+    ),
+    (
+        SourceCodeManager.create_git_commit,
+        {"message": "msg", "tree_sha": "t", "parent_shas": ["p"]},
+        _check_create_git_commit,
+    ),
+    (SourceCodeManager.get_pull_request_files, {"pull_request_id": "1"}, _check_pr_files),
+    (SourceCodeManager.get_pull_request_commits, {"pull_request_id": "1"}, _check_pr_commits),
+    (SourceCodeManager.get_pull_request_diff, {"pull_request_id": "1"}, _check_pr_diff),
+    (SourceCodeManager.list_pull_requests, {}, _check_list_pull_requests),
+    (
+        SourceCodeManager.create_pull_request,
+        {"title": "T", "body": "B", "head": "h", "base": "b"},
+        _check_create_pull_request,
+    ),
+    (SourceCodeManager.update_pull_request, {"pull_request_id": "1"}, _check_update_pull_request),
+    (
+        SourceCodeManager.request_review,
+        {"pull_request_id": "1", "reviewers": ["user1"]},
+        _check_none,
+    ),
+    (
+        SourceCodeManager.create_review_comment,
+        {
+            "pull_request_id": "1",
+            "body": "comment",
+            "commit_sha": "abc",
+            "path": "f.py",
+        },
+        _check_review_comment,
+    ),
+    (
+        SourceCodeManager.create_review,
+        {
+            "pull_request_id": "1",
+            "commit_sha": "abc",
+            "event": "COMMENT",
+            "comments": [],
+        },
+        _check_review,
+    ),
+    (
+        SourceCodeManager.create_check_run,
+        {"name": "check", "head_sha": "abc"},
+        _check_create_check_run,
+    ),
+    (
+        SourceCodeManager.get_check_run,
+        {"check_run_id": "300"},
+        _check_get_check_run,
+    ),
+    (
+        SourceCodeManager.update_check_run,
+        {"check_run_id": "300"},
+        _check_update_check_run,
+    ),
+    (
+        SourceCodeManager.minimize_comment,
+        {"comment_node_id": "IC_abc", "reason": "OUTDATED"},
+        _check_none,
+    ),
+    (
+        SourceCodeManager.resolve_review_thread,
+        {"thread_node_id": "PRT_abc"},
         _check_none,
     ),
 )
