@@ -70,6 +70,13 @@ describe('MultiQueryModeContent', () => {
       match: [MockApiClient.matchQuery({attributeType: 'number'})],
     });
 
+    MockApiClient.addMockResponse({
+      url: `/organizations/${organization.slug}/trace-items/attributes/`,
+      method: 'GET',
+      body: [],
+      match: [MockApiClient.matchQuery({attributeType: 'boolean'})],
+    });
+
     eventsRequest = MockApiClient.addMockResponse({
       url: `/organizations/${organization.slug}/events/`,
       method: 'GET',

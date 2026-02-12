@@ -34,7 +34,7 @@ function mockSpanTags({
   mockedTags,
 }: {
   mockedTags: Array<{key: string; name: string}>;
-  type: 'string' | 'number';
+  type: 'string' | 'number' | 'boolean';
 }) {
   MockApiClient.addMockResponse({
     url: `/organizations/org-slug/trace-items/attributes/`,
@@ -90,6 +90,8 @@ describe('SpansSearchBar', () => {
 
     mockSpanTags({type: 'number', mockedTags: []});
     mockSpanTagValues({type: 'number', tagKey: 'span.op', mockedValues: []});
+
+    mockSpanTags({type: 'boolean', mockedTags: []});
   });
 
   it('renders the initial query conditions', async () => {
