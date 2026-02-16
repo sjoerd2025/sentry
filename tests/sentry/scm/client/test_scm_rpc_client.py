@@ -6,7 +6,13 @@ import pytest
 import requests
 import responses.matchers
 
-from sentry.scm.client.scm_rpc_client import SCMUnhandledException, SourceCodeManagerRPCClient
+from sentry.scm.client.scm_rpc_client import (
+    SCMCodedError,
+    SCMError,
+    SCMProviderException,
+    SCMUnhandledException,
+    SourceCodeManagerRPCClient,
+)
 from sentry.scm.client.types import (
     Author,
     CheckRun,
@@ -128,30 +134,6 @@ def test_additional_fields_in_rpc_response_are_ignored(client: SourceCodeManager
             raw={"foo": "bar"},
         )
     ]
-    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
-
-
-@responses.activate
-def test_bad_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
-    responses.add(
-        responses.POST,
-        f"{base_url}/{prefix}/get_issue_comments_v1/",
-        match=[
-            responses.matchers.json_params_matcher(
-                {
-                    "args": {
-                        "issue_id": "test-issue-id",
-                        "organization_id": 123,
-                        "repository_id": 456,
-                    }
-                }
-            ),
-        ],
-        json={"data": [{"foo": "bar"}]},
-    )
-    with pytest.raises(SCMUnhandledException) as exc:
-        client.get_issue_comments("test-issue-id")
-    assert str(exc.value.args[0]) == "Unexpected response data"
     responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
 
 
@@ -804,3 +786,236 @@ def test_simple_success(
     # With mostly positional arguments
     assert param.method(client, **param.args, **param.kwargs) == param.expected_result
     responses.assert_call_count(param.expected_url, 2)
+
+
+@responses.activate
+def test_non_json_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
+        status=299,
+        body="non-json response",
+    )
+    with pytest.raises(SCMUnhandledException) as exc:
+        client.get_issue_comments("test-issue-id")
+    assert exc.value.args == ("Response was not JSON", 299, "non-json response")
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
+
+
+@responses.activate
+def test_invalid_json_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
+        status=299,
+        json={"errors": 42},
+    )
+    with pytest.raises(SCMUnhandledException) as exc:
+        client.get_issue_comments("test-issue-id")
+    assert exc.value.args == ("Response did not match expected schema", 299, {"errors": 42})
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
+
+
+@responses.activate
+def test_empty_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
+        status=299,
+        json={},
+    )
+    with pytest.raises(SCMUnhandledException) as exc:
+        client.get_issue_comments("test-issue-id")
+    assert exc.value.args == ("Response did not match expected schema", 299, {})
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
+
+
+@responses.activate
+def test_invalid_json_response_data_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
+        status=299,
+        json={"data": [{"foo": "bar"}]},
+    )
+    with pytest.raises(SCMUnhandledException) as exc:
+        client.get_issue_comments("test-issue-id")
+    assert exc.value.args == (
+        "Response data did not match expected return type",
+        299,
+        {"data": [{"foo": "bar"}]},
+    )
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
+
+
+@responses.activate
+def test_scm_coded_error_is_raised_as_is(client: SourceCodeManagerRPCClient):
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
+        json={
+            "errors": [
+                {
+                    "type": "SCMCodedError",
+                    "details": [
+                        "repository_not_found",
+                        "A repository could not be found.",
+                        "Blah",
+                        68,
+                    ],
+                }
+            ]
+        },
+        status=400,
+    )
+    with pytest.raises(SCMCodedError) as exc:
+        client.get_issue_comments("test-issue-id")
+    assert exc.value.args == (
+        "repository_not_found",
+        "A repository could not be found.",
+        "Blah",
+        68,
+    )
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
+
+
+@responses.activate
+def test_multiple_errors_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
+        json={
+            "errors": [
+                {
+                    "type": "SCMCodedError",
+                    "details": [
+                        "repository_not_found",
+                        "A repository could not be found.",
+                        "Blah",
+                        68,
+                    ],
+                },
+                {
+                    "type": "SCMCodedError",
+                    "details": [
+                        "repository_not_found",
+                        "A repository could not be found.",
+                        "Blah",
+                        68,
+                    ],
+                },
+            ]
+        },
+        status=400,
+    )
+    with pytest.raises(SCMUnhandledException) as exc:
+        client.get_issue_comments("test-issue-id")
+    assert len(exc.value.args) == 3
+    assert exc.value.args[0] == "Multiple errors returned"
+    assert exc.value.args[1] == 400
+    assert len(exc.value.args[2]) == 2
+    assert exc.value.args[2][0].args == (
+        "repository_not_found",
+        "A repository could not be found.",
+        "Blah",
+        68,
+    )
+    assert exc.value.args[2][1].args == (
+        "repository_not_found",
+        "A repository could not be found.",
+        "Blah",
+        68,
+    )
+
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
+
+
+@responses.activate
+def test_scm_provider_exception_is_raised_as_is(client: SourceCodeManagerRPCClient):
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
+        json={
+            "errors": [
+                {
+                    "type": "SCMProviderException",
+                    "details": [
+                        "A provider error occurred.",
+                        "Blah",
+                        68,
+                    ],
+                }
+            ]
+        },
+        status=500,
+    )
+    with pytest.raises(SCMProviderException) as exc:
+        client.get_issue_comments("test-issue-id")
+    assert exc.value.args == (
+        "A provider error occurred.",
+        "Blah",
+        68,
+    )
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
+
+
+@responses.activate
+def test_scm_error_is_raised_as_is(client: SourceCodeManagerRPCClient):
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
+        json={
+            "errors": [
+                {
+                    "type": "SCMError",
+                    "details": [
+                        "A generic SCM error occurred.",
+                        "Blah",
+                        68,
+                    ],
+                }
+            ]
+        },
+        status=500,
+    )
+    with pytest.raises(SCMError) as exc:
+        client.get_issue_comments("test-issue-id")
+    assert exc.value.args == (
+        "A generic SCM error occurred.",
+        "Blah",
+        68,
+    )
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
+
+
+@responses.activate
+def test_unknown_error_type_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
+        json={
+            "errors": [
+                {
+                    "type": "UnknownErrorType",
+                    "details": [
+                        "Some unknown error occurred.",
+                        "Blah",
+                        68,
+                    ],
+                }
+            ]
+        },
+        status=299,
+    )
+    with pytest.raises(SCMUnhandledException) as exc:
+        client.get_issue_comments("test-issue-id")
+    assert exc.value.args == (
+        "Unknown error type: UnknownErrorType",
+        299,
+        [
+            "Some unknown error occurred.",
+            "Blah",
+            68,
+        ],
+    )
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from enum import Enum
 from typing import Any, TypedDict, overload
 
 import orjson
@@ -51,10 +52,38 @@ class _BasicArgs(TypedDict):
     repository_id: int | _CompositeRepositoryId
 
 
+class _Error(pydantic.BaseModel):
+    type: str
+    details: list[Any]
+
+
+class _Unset(Enum):
+    """
+    None is a valid value for field 'data', so we need a way to mark it as absent from the response.
+
+    A single-valued Enum plays well with the type checker.
+    """
+
+    UNSET = "unset"
+
+
+class _ResponseBody(pydantic.BaseModel):
+    data: Any | _Unset = _Unset.UNSET
+    errors: list[_Error] | _Unset = _Unset.UNSET
+
+
 # Client interface
 
 
 class SCMError(Exception):
+    pass
+
+
+class SCMProviderException(SCMError):
+    pass
+
+
+class SCMCodedError(SCMError):
     pass
 
 
@@ -155,16 +184,60 @@ class SourceCodeManagerRPCClient:
             "Authorization": f"rpcsignature {signature}",
             "Content-Type": "application/json",
         }
+
         response = self._session.post(url, data=body, headers=headers)
-        response.raise_for_status()
-        data = response.json()["data"]
-        if return_type is None:
-            return None
+
+        try:
+            response_json = response.json()
+        except requests.exceptions.JSONDecodeError as e:
+            raise SCMUnhandledException(
+                "Response was not JSON", response.status_code, response.text
+            ) from e
+
+        try:
+            response_body = _ResponseBody.parse_obj(response_json)
+        except pydantic.ValidationError as e:
+            raise SCMUnhandledException(
+                "Response did not match expected schema", response.status_code, response_json
+            ) from e
+
+        if response_body.errors is not _Unset.UNSET:
+            exceptions: list[SCMError] = []
+            for error in response_body.errors:
+                if error.type == "SCMCodedError":
+                    exceptions.append(SCMCodedError(*error.details))
+                elif error.type == "SCMProviderException":
+                    exceptions.append(SCMProviderException(*error.details))
+                elif error.type == "SCMError":
+                    exceptions.append(SCMError(*error.details))
+                else:
+                    exceptions.append(
+                        SCMUnhandledException(
+                            f"Unknown error type: {error.type}", response.status_code, error.details
+                        )
+                    )
+            if len(exceptions) == 1:
+                raise exceptions[0]
+            else:
+                raise SCMUnhandledException(
+                    "Multiple errors returned", response.status_code, exceptions
+                )
+        elif response_body.data is _Unset.UNSET:
+            raise SCMUnhandledException(
+                "Response did not match expected schema", response.status_code, response_json
+            )
         else:
-            try:
-                return pydantic.parse_obj_as(return_type, data)
-            except pydantic.ValidationError as exc:
-                raise SCMUnhandledException("Unexpected response data") from exc
+            if return_type is None:
+                return None
+            else:
+                try:
+                    return pydantic.parse_obj_as(return_type, response_body.data)
+                except pydantic.ValidationError as e:
+                    raise SCMUnhandledException(
+                        "Response data did not match expected return type",
+                        response.status_code,
+                        response_json,
+                    ) from e
 
     def get_issue_comments(self, issue_id: str) -> list[CommentActionResult]:
         return self._call(
