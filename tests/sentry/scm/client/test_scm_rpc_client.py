@@ -51,6 +51,7 @@ from sentry.scm.client.types import (
 
 shared_secret = "test-shared-secret"
 base_url = "http://testserver"
+prefix = "api/0/internal/scm-rpc"
 
 
 @pytest.fixture
@@ -67,7 +68,7 @@ def client() -> SourceCodeManagerRPCClient:
 def test_request_is_signed(client: SourceCodeManagerRPCClient):
     responses.add(
         responses.POST,
-        f"{base_url}/scm-rpc/create_issue_comment_v1/",
+        f"{base_url}/{prefix}/create_issue_comment_v1/",
         match=[
             responses.matchers.header_matcher(
                 {
@@ -78,14 +79,14 @@ def test_request_is_signed(client: SourceCodeManagerRPCClient):
         json={"data": None},
     )
     client.create_issue_comment("test-issue-id", "body")
-    responses.assert_call_count(f"{base_url}/scm-rpc/create_issue_comment_v1/", 1)
+    responses.assert_call_count(f"{base_url}/{prefix}/create_issue_comment_v1/", 1)
 
 
 @responses.activate
 def test_additional_fields_in_rpc_response_are_ignored(client: SourceCodeManagerRPCClient):
     responses.add(
         responses.POST,
-        f"{base_url}/scm-rpc/get_issue_comments_v1/",
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
         match=[
             responses.matchers.json_params_matcher(
                 {
@@ -127,14 +128,14 @@ def test_additional_fields_in_rpc_response_are_ignored(client: SourceCodeManager
             raw={"foo": "bar"},
         )
     ]
-    responses.assert_call_count(f"{base_url}/scm-rpc/get_issue_comments_v1/", 1)
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
 
 
 @responses.activate
 def test_bad_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
     responses.add(
         responses.POST,
-        f"{base_url}/scm-rpc/get_issue_comments_v1/",
+        f"{base_url}/{prefix}/get_issue_comments_v1/",
         match=[
             responses.matchers.json_params_matcher(
                 {
@@ -151,7 +152,7 @@ def test_bad_response_raises_unhandled_exception(client: SourceCodeManagerRPCCli
     with pytest.raises(SCMUnhandledException) as exc:
         client.get_issue_comments("test-issue-id")
     assert str(exc.value.args[0]) == "Unexpected response data"
-    responses.assert_call_count(f"{base_url}/scm-rpc/get_issue_comments_v1/", 1)
+    responses.assert_call_count(f"{base_url}/{prefix}/get_issue_comments_v1/", 1)
 
 
 @responses.activate
@@ -167,7 +168,7 @@ def test_provided_session_is_used():
     )
     responses.add(
         responses.POST,
-        f"{base_url}/scm-rpc/create_issue_comment_v1/",
+        f"{base_url}/{prefix}/create_issue_comment_v1/",
         # The custom header from the provided session is included in the request
         match=[
             responses.matchers.header_matcher(
@@ -179,7 +180,7 @@ def test_provided_session_is_used():
         json={"data": None},
     )
     client.create_issue_comment("test-issue-id", "body")
-    responses.assert_call_count(f"{base_url}/scm-rpc/create_issue_comment_v1/", 1)
+    responses.assert_call_count(f"{base_url}/{prefix}/create_issue_comment_v1/", 1)
 
 
 class SimpleSuccessTest(NamedTuple):
@@ -197,7 +198,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_issue_comments,
             {"issue_id": "test-issue-id"},
             {},
-            f"{base_url}/scm-rpc/get_issue_comments_v1/",
+            f"{base_url}/{prefix}/get_issue_comments_v1/",
             [
                 CommentActionResult(
                     comment=Comment(
@@ -217,21 +218,21 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.create_issue_comment,
             {"issue_id": "test-issue-id", "body": "test comment body"},
             {},
-            f"{base_url}/scm-rpc/create_issue_comment_v1/",
+            f"{base_url}/{prefix}/create_issue_comment_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.delete_issue_comment,
             {"comment_id": "comment-id"},
             {},
-            f"{base_url}/scm-rpc/delete_issue_comment_v1/",
+            f"{base_url}/{prefix}/delete_issue_comment_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.get_pull_request,
             {"pull_request_id": "pull-request-id"},
             {},
-            f"{base_url}/scm-rpc/get_pull_request_v1/",
+            f"{base_url}/{prefix}/get_pull_request_v1/",
             PullRequestActionResult(
                 pull_request=PullRequest(
                     id=1,
@@ -253,7 +254,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_pull_request_comments,
             dict(pull_request_id="pull-request-id"),
             {},
-            f"{base_url}/scm-rpc/get_pull_request_comments_v1/",
+            f"{base_url}/{prefix}/get_pull_request_comments_v1/",
             [
                 CommentActionResult(
                     comment=Comment(
@@ -270,21 +271,21 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.create_pull_request_comment,
             {"pull_request_id": "pull-request-id", "body": "comment body"},
             {},
-            f"{base_url}/scm-rpc/create_pull_request_comment_v1/",
+            f"{base_url}/{prefix}/create_pull_request_comment_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.delete_pull_request_comment,
             {"comment_id": "comment-id"},
             {},
-            f"{base_url}/scm-rpc/delete_pull_request_comment_v1/",
+            f"{base_url}/{prefix}/delete_pull_request_comment_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.get_issue_comment_reactions,
             dict(comment_id="comment-id"),
             {},
-            f"{base_url}/scm-rpc/get_issue_comment_reactions_v1/",
+            f"{base_url}/{prefix}/get_issue_comment_reactions_v1/",
             [
                 ReactionResult(
                     id="reaction-id",
@@ -297,21 +298,21 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.create_issue_comment_reaction,
             {"comment_id": "comment-id", "reaction": "+1"},
             {},
-            f"{base_url}/scm-rpc/create_issue_comment_reaction_v1/",
+            f"{base_url}/{prefix}/create_issue_comment_reaction_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.delete_issue_comment_reaction,
             {"comment_id": "comment-id", "reaction_id": "reaction-id"},
             {},
-            f"{base_url}/scm-rpc/delete_issue_comment_reaction_v1/",
+            f"{base_url}/{prefix}/delete_issue_comment_reaction_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.get_pull_request_comment_reactions,
             dict(comment_id="comment-id"),
             {},
-            f"{base_url}/scm-rpc/get_pull_request_comment_reactions_v1/",
+            f"{base_url}/{prefix}/get_pull_request_comment_reactions_v1/",
             [
                 ReactionResult(
                     id="reaction-id",
@@ -324,21 +325,21 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.create_pull_request_comment_reaction,
             {"comment_id": "comment-id", "reaction": "+1"},
             {},
-            f"{base_url}/scm-rpc/create_pull_request_comment_reaction_v1/",
+            f"{base_url}/{prefix}/create_pull_request_comment_reaction_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.delete_pull_request_comment_reaction,
             {"comment_id": "comment-id", "reaction_id": "reaction-id"},
             {},
-            f"{base_url}/scm-rpc/delete_pull_request_comment_reaction_v1/",
+            f"{base_url}/{prefix}/delete_pull_request_comment_reaction_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.get_issue_reactions,
             dict(issue_id="issue-id"),
             {},
-            f"{base_url}/scm-rpc/get_issue_reactions_v1/",
+            f"{base_url}/{prefix}/get_issue_reactions_v1/",
             [
                 ReactionResult(
                     id="reaction-id",
@@ -351,21 +352,21 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.create_issue_reaction,
             {"issue_id": "issue-id", "reaction": "+1"},
             {},
-            f"{base_url}/scm-rpc/create_issue_reaction_v1/",
+            f"{base_url}/{prefix}/create_issue_reaction_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.delete_issue_reaction,
             {"issue_id": "issue-id", "reaction_id": "reaction-id"},
             {},
-            f"{base_url}/scm-rpc/delete_issue_reaction_v1/",
+            f"{base_url}/{prefix}/delete_issue_reaction_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.get_pull_request_reactions,
             dict(pull_request_id="pull-request-id"),
             {},
-            f"{base_url}/scm-rpc/get_pull_request_reactions_v1/",
+            f"{base_url}/{prefix}/get_pull_request_reactions_v1/",
             [
                 ReactionResult(
                     id="reaction-id",
@@ -378,21 +379,21 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.create_pull_request_reaction,
             {"pull_request_id": "pull-request-id", "reaction": "+1"},
             {},
-            f"{base_url}/scm-rpc/create_pull_request_reaction_v1/",
+            f"{base_url}/{prefix}/create_pull_request_reaction_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.delete_pull_request_reaction,
             {"pull_request_id": "pull-request-id", "reaction_id": "reaction-id"},
             {},
-            f"{base_url}/scm-rpc/delete_pull_request_reaction_v1/",
+            f"{base_url}/{prefix}/delete_pull_request_reaction_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.get_branch,
             {"branch": "branch-name"},
             {},
-            f"{base_url}/scm-rpc/get_branch_v1/",
+            f"{base_url}/{prefix}/get_branch_v1/",
             GitRefActionResult(
                 git_ref=GitRef(ref="ref", sha="sha"), provider="github", raw={"foo": "bar"}
             ),
@@ -401,7 +402,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.create_branch,
             {"branch": "branch-name", "sha": "sha"},
             {},
-            f"{base_url}/scm-rpc/create_branch_v1/",
+            f"{base_url}/{prefix}/create_branch_v1/",
             GitRefActionResult(
                 git_ref=GitRef(ref="ref", sha="sha"), provider="github", raw={"foo": "bar"}
             ),
@@ -410,21 +411,21 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.update_branch,
             {"branch": "branch", "sha": "sha"},
             {"force": False},
-            f"{base_url}/scm-rpc/update_branch_v1/",
+            f"{base_url}/{prefix}/update_branch_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.create_git_blob,
             {"content": "content", "encoding": "utf-8"},
             {},
-            f"{base_url}/scm-rpc/create_git_blob_v1/",
+            f"{base_url}/{prefix}/create_git_blob_v1/",
             GitBlobActionResult(git_blob=GitBlob(sha="sha"), provider="github", raw={"foo": "bar"}),
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.get_file_content,
             {"path": "file-path", "ref": "ref"},
             {},
-            f"{base_url}/scm-rpc/get_file_content_v1/",
+            f"{base_url}/{prefix}/get_file_content_v1/",
             FileContentActionResult(
                 file_content=FileContent(
                     path="file-path", sha="sha", content="file content", encoding="utf-8", size=42
@@ -437,7 +438,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_commit,
             {"sha": "sha"},
             {},
-            f"{base_url}/scm-rpc/get_commit_v1/",
+            f"{base_url}/{prefix}/get_commit_v1/",
             CommitActionResult(
                 commit=Commit(
                     sha="sha",
@@ -455,7 +456,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_commits,
             {},
             dict(sha=None, path=None),
-            f"{base_url}/scm-rpc/get_commits_v1/",
+            f"{base_url}/{prefix}/get_commits_v1/",
             [
                 CommitActionResult(
                     commit=Commit(
@@ -475,7 +476,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.compare_commits,
             {"start_sha": "start", "end_sha": "end"},
             {},
-            f"{base_url}/scm-rpc/compare_commits_v1/",
+            f"{base_url}/{prefix}/compare_commits_v1/",
             CommitComparisonActionResult(
                 comparison=CommitComparison(ahead_by=1, behind_by=2),
                 provider="github",
@@ -486,7 +487,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_tree,
             {"tree_sha": "sha"},
             {"recursive": True},
-            f"{base_url}/scm-rpc/get_tree_v1/",
+            f"{base_url}/{prefix}/get_tree_v1/",
             GitTreeActionResult(
                 git_tree=GitTree(
                     tree=[TreeEntry(path="file-path", mode="100644", type="blob", sha="sha")],
@@ -500,7 +501,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_git_commit,
             {"sha": "sha"},
             {},
-            f"{base_url}/scm-rpc/get_git_commit_v1/",
+            f"{base_url}/{prefix}/get_git_commit_v1/",
             GitCommitObjectActionResult(
                 git_commit=GitCommitObject(
                     sha="sha", tree=GitCommitTree(sha="tree-sha"), message="message"
@@ -513,7 +514,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.create_git_tree,
             {"tree": [InputTreeEntry(path="path", mode="mode", type="type", sha="sha")]},
             {"base_tree": "base"},
-            f"{base_url}/scm-rpc/create_git_tree_v1/",
+            f"{base_url}/{prefix}/create_git_tree_v1/",
             GitTreeActionResult(
                 git_tree=GitTree(
                     tree=[TreeEntry(path="file-path", mode="100644", type="blob", sha="sha")],
@@ -527,7 +528,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.create_git_commit,
             {"message": "message", "tree_sha": "tree", "parent_shas": ["sha-1", "sha-2"]},
             {},
-            f"{base_url}/scm-rpc/create_git_commit_v1/",
+            f"{base_url}/{prefix}/create_git_commit_v1/",
             GitCommitObjectActionResult(
                 git_commit=GitCommitObject(
                     sha="sha", tree=GitCommitTree(sha="tree-sha"), message="message"
@@ -540,7 +541,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_pull_request_files,
             {"pull_request_id": "pull-request-id"},
             {},
-            f"{base_url}/scm-rpc/get_pull_request_files_v1/",
+            f"{base_url}/{prefix}/get_pull_request_files_v1/",
             PullRequestFileActionResult(
                 files=[
                     PullRequestFile(
@@ -560,7 +561,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_pull_request_commits,
             {"pull_request_id": "pr-id"},
             {},
-            f"{base_url}/scm-rpc/get_pull_request_commits_v1/",
+            f"{base_url}/{prefix}/get_pull_request_commits_v1/",
             PullRequestCommitActionResult(
                 commits=[
                     PullRequestCommit(
@@ -579,14 +580,14 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_pull_request_diff,
             {"pull_request_id": "pr-id"},
             {},
-            f"{base_url}/scm-rpc/get_pull_request_diff_v1/",
+            f"{base_url}/{prefix}/get_pull_request_diff_v1/",
             PullRequestDiffActionResult(diff="diff content", provider="github"),
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.list_pull_requests,
             {"state": "open", "head": None},
             {},
-            f"{base_url}/scm-rpc/list_pull_requests_v1/",
+            f"{base_url}/{prefix}/list_pull_requests_v1/",
             [
                 PullRequestActionResult(
                     pull_request=PullRequest(
@@ -615,7 +616,7 @@ class SimpleSuccessTest(NamedTuple):
                 "base": "base",
             },
             {"draft": False},
-            f"{base_url}/scm-rpc/create_pull_request_v1/",
+            f"{base_url}/{prefix}/create_pull_request_v1/",
             PullRequestActionResult(
                 pull_request=PullRequest(
                     id=1,
@@ -637,7 +638,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.update_pull_request,
             {"pull_request_id": "pr-id"},
             {"title": "title", "body": "body", "state": "state"},
-            f"{base_url}/scm-rpc/update_pull_request_v1/",
+            f"{base_url}/{prefix}/update_pull_request_v1/",
             PullRequestActionResult(
                 pull_request=PullRequest(
                     id=1,
@@ -659,7 +660,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.request_review,
             {"pull_request_id": "pull-request-id", "reviewers": ["reviewer1", "reviewer2"]},
             {},
-            f"{base_url}/scm-rpc/request_review_v1/",
+            f"{base_url}/{prefix}/request_review_v1/",
             None,
         ),
         SimpleSuccessTest(
@@ -671,7 +672,7 @@ class SimpleSuccessTest(NamedTuple):
                 "path": "path",
             },
             {"line": 42, "side": "LEFT", "start_line": 57, "start_side": "right"},
-            f"{base_url}/scm-rpc/create_review_comment_v1/",
+            f"{base_url}/{prefix}/create_review_comment_v1/",
             ReviewCommentActionResult(
                 review_comment=ReviewComment(
                     id=73, html_url="http://blah", path="path", body="comment body"
@@ -693,7 +694,7 @@ class SimpleSuccessTest(NamedTuple):
                 ],
             },
             {"body": "body"},
-            f"{base_url}/scm-rpc/create_review_v1/",
+            f"{base_url}/{prefix}/create_review_v1/",
             ReviewActionResult(
                 review=Review(id=73, html_url="http://blah"), provider="github", raw={"foo": "bar"}
             ),
@@ -709,7 +710,7 @@ class SimpleSuccessTest(NamedTuple):
                 "completed_at": "",
                 "output": CheckRunOutput(title="title", summary="summary", text="text"),
             },
-            f"{base_url}/scm-rpc/create_check_run_v1/",
+            f"{base_url}/{prefix}/create_check_run_v1/",
             CheckRunActionResult(
                 check_run=CheckRun(
                     id=73, name="name", status="status", conclusion="ok", html_url="http://blah"
@@ -722,7 +723,7 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.get_check_run,
             {"check_run_id": "chk-id"},
             {},
-            f"{base_url}/scm-rpc/get_check_run_v1/",
+            f"{base_url}/{prefix}/get_check_run_v1/",
             CheckRunActionResult(
                 check_run=CheckRun(
                     id=73, name="name", status="status", conclusion="ok", html_url="http://blah"
@@ -739,7 +740,7 @@ class SimpleSuccessTest(NamedTuple):
                 "conclusion": "ok",
                 "output": CheckRunOutput(title="title", summary="summary", text="text"),
             },
-            f"{base_url}/scm-rpc/update_check_run_v1/",
+            f"{base_url}/{prefix}/update_check_run_v1/",
             CheckRunActionResult(
                 check_run=CheckRun(
                     id=73, name="name", status="status", conclusion="ok", html_url="http://blah"
@@ -752,14 +753,14 @@ class SimpleSuccessTest(NamedTuple):
             SourceCodeManagerRPCClient.minimize_comment,
             {"comment_node_id": "comment-node-id", "reason": "reason"},
             {},
-            f"{base_url}/scm-rpc/minimize_comment_v1/",
+            f"{base_url}/{prefix}/minimize_comment_v1/",
             None,
         ),
         SimpleSuccessTest(
             SourceCodeManagerRPCClient.resolve_review_thread,
             {},
             {"thread_node_id": "thread-node-id"},
-            f"{base_url}/scm-rpc/resolve_review_thread_v1/",
+            f"{base_url}/{prefix}/resolve_review_thread_v1/",
             None,
         ),
     ],

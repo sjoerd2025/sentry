@@ -64,12 +64,34 @@ class SCMUnhandledException(SCMError):
 
 class SourceCodeManagerRPCClient:
     """
-    You may pass in a `requests.Session` to the constructor if you want to manage the session lifecycle yourself (e.g. for connection pooling or custom configuration).
-    If you do not pass in a session, the client will create its own session and manage its lifecycle internally.
+    base_url:
+        E.g. "http://dev.getsentry.net:8000" (no trailing slash)
 
-    In both cases, you can call `.close()`. It will close the session if the client owns it, and do nothing if you passed in a session (since you manage its lifecycle).
-    And in both cases, you can also use the client as a context manager, which will call `.close()` on exit.
+    shared_secret:
+        The shared secret configured on the SCM RPC server side (SCM_RPC_SHARED_SECRET), used for authenticating requests
+
+    organization_id:
+        The Sentry organization ID that the SCM RPC requests will be made on behalf of
+
+    repository_id:
+        The repository ID that the SCM RPC requests will be made on.
+        Either an internal integer repository ID, or (provider, external_id).
+
+    session:
+        You may pass in a `requests.Session` to the constructor if you want to manage the session lifecycle yourself
+        (e.g. for connection pooling or custom configuration).
+        If you do not pass in a session, the client will create its own session and manage its lifecycle internally.
+
+        In both cases, you can call `.close()`. It will close the session if the client owns it,
+        and do nothing if you passed in a session (since you manage its lifecycle).
+        And in both cases, you can also use the client as a context manager, which will call `.close()` on exit.
     """
+
+    # At the time of writing, the prefix is configured in:
+    # - api/0: https://github.com/getsentry/sentry/blob/de54779095c3819213569ead2f28dfb6d0fe082e/src/sentry/web/urls.py#L178-L181
+    # - internal: https://github.com/getsentry/sentry/blob/de54779095c3819213569ead2f28dfb6d0fe082e/src/sentry/api/urls.py#L3763-L3766
+    # - scm-rpc: https://github.com/getsentry/sentry/blob/de54779095c3819213569ead2f28dfb6d0fe082e/src/sentry/api/urls.py#L3552-L3556
+    API_PREFIX = "api/0/internal/scm-rpc"
 
     def __init__(
         self,
@@ -81,6 +103,7 @@ class SourceCodeManagerRPCClient:
         session: requests.Session | None = None,
     ) -> None:
         self._base_url = base_url
+        assert not self._base_url.endswith("/"), "base_url should not have a trailing slash"
         self._shared_secret = shared_secret
 
         if isinstance(repository_id, int):
@@ -125,10 +148,13 @@ class SourceCodeManagerRPCClient:
     def _call[T](
         self, method: str, method_args: dict[str, Any], return_type: type[T] | None
     ) -> T | None:
-        url = f"{self._base_url}/scm-rpc/{method}/"
+        url = f"{self._base_url}/{self.API_PREFIX}/{method}/"
         body = orjson.dumps({"args": self._basic_args | method_args})
         signature = _generate_request_signature(self._shared_secret, url, body=body)
-        headers = {"Authorization": f"rpcsignature {signature}"}
+        headers = {
+            "Authorization": f"rpcsignature {signature}",
+            "Content-Type": "application/json",
+        }
         response = self._session.post(url, data=body, headers=headers)
         response.raise_for_status()
         data = response.json()["data"]
