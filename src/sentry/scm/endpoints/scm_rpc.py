@@ -200,13 +200,17 @@ class ScmRpcServiceEndpoint(Endpoint):
             result = self._dispatch_to_source_code_manager(method_name, request.data)
         except SCMCodedError as e:
             sentry_sdk.capture_exception()
-            return Response(data={"errors": [{"details": e.args}]}, status=400)
+            return Response(
+                data={"errors": [{"type": "SCMCodedError", "details": e.args}]}, status=400
+            )
         except SCMProviderException as e:
             sentry_sdk.capture_exception()
-            return Response(data={"errors": [{"details": e.args}]}, status=503)
+            return Response(
+                data={"errors": [{"type": "SCMProviderException", "details": e.args}]}, status=503
+            )
         except SCMError as e:
             sentry_sdk.capture_exception()
-            return Response(data={"errors": [{"details": e.args}]}, status=500)
+            return Response(data={"errors": [{"type": "SCMError", "details": e.args}]}, status=500)
         except Exception:
             sentry_sdk.capture_exception()
             raise
