@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from typing import Any, NamedTuple
+from unittest import mock
 
 import pydantic
 import pytest
@@ -60,6 +61,83 @@ base_url = "http://testserver"
 prefix = "api/0/internal/scm-rpc"
 
 
+@mock.patch("requests.Session")
+def test_using_client_as_context_manager_closes_its_owned_session(
+    mock_session_class: mock.Mock,
+) -> None:
+    with SourceCodeManagerRPCClient(
+        base_url=base_url,
+        shared_secret=shared_secret,
+        organization_id=123,
+        repository_id=456,
+    ) as client:
+        pass
+    assert client._session is mock_session_class.return_value
+    close_method: mock.Mock = mock_session_class.return_value.close
+    assert close_method.call_count == 1
+
+
+@responses.activate
+def test_numerical_repository_id_is_sent_as_is() -> None:
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/create_issue_comment_v1/",
+        match=[
+            responses.matchers.json_params_matcher(
+                {
+                    "args": {
+                        "organization_id": 123,
+                        "repository_id": 456,
+                        "issue_id": "test-issue-id",
+                        "body": "body",
+                    }
+                }
+            ),
+        ],
+        json={"data": None},
+    )
+    client = SourceCodeManagerRPCClient(
+        base_url=base_url,
+        shared_secret=shared_secret,
+        organization_id=123,
+        repository_id=456,
+    )
+    client.create_issue_comment("test-issue-id", "body")
+    responses.assert_call_count(f"{base_url}/{prefix}/create_issue_comment_v1/", 1)
+
+
+@responses.activate
+def test_composite_repository_id_is_sent_as_dict() -> None:
+    responses.add(
+        responses.POST,
+        f"{base_url}/{prefix}/create_issue_comment_v1/",
+        match=[
+            responses.matchers.json_params_matcher(
+                {
+                    "args": {
+                        "organization_id": 123,
+                        "repository_id": {
+                            "provider": "integrations:github",
+                            "external_id": "456",
+                        },
+                        "issue_id": "test-issue-id",
+                        "body": "body",
+                    }
+                }
+            ),
+        ],
+        json={"data": None},
+    )
+    client = SourceCodeManagerRPCClient(
+        base_url=base_url,
+        shared_secret=shared_secret,
+        organization_id=123,
+        repository_id=("integrations:github", "456"),
+    )
+    client.create_issue_comment("test-issue-id", "body")
+    responses.assert_call_count(f"{base_url}/{prefix}/create_issue_comment_v1/", 1)
+
+
 @pytest.fixture
 def client() -> SourceCodeManagerRPCClient:
     return SourceCodeManagerRPCClient(
@@ -71,7 +149,7 @@ def client() -> SourceCodeManagerRPCClient:
 
 
 @responses.activate
-def test_request_is_signed(client: SourceCodeManagerRPCClient):
+def test_request_is_signed(client: SourceCodeManagerRPCClient) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/create_issue_comment_v1/",
@@ -89,21 +167,10 @@ def test_request_is_signed(client: SourceCodeManagerRPCClient):
 
 
 @responses.activate
-def test_additional_fields_in_rpc_response_are_ignored(client: SourceCodeManagerRPCClient):
+def test_additional_fields_in_rpc_response_are_ignored(client: SourceCodeManagerRPCClient) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
-        match=[
-            responses.matchers.json_params_matcher(
-                {
-                    "args": {
-                        "issue_id": "test-issue-id",
-                        "organization_id": 123,
-                        "repository_id": 456,
-                    }
-                }
-            ),
-        ],
         json={
             "data": [
                 {
@@ -138,7 +205,7 @@ def test_additional_fields_in_rpc_response_are_ignored(client: SourceCodeManager
 
 
 @responses.activate
-def test_provided_session_is_used():
+def test_provided_session_is_used() -> None:
     session = requests.Session()
     session.headers["X-Test-Header"] = "test value"
     client = SourceCodeManagerRPCClient(
@@ -752,7 +819,7 @@ class SimpleSuccessTest(NamedTuple):
 def test_simple_success(
     client: SourceCodeManagerRPCClient,
     param: SimpleSuccessTest,
-):
+) -> None:
     data: Any
     if param.expected_result is None:
         data = None
@@ -789,7 +856,7 @@ def test_simple_success(
 
 
 @responses.activate
-def test_non_json_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+def test_non_json_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
@@ -803,7 +870,9 @@ def test_non_json_response_raises_unhandled_exception(client: SourceCodeManagerR
 
 
 @responses.activate
-def test_invalid_json_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+def test_invalid_json_response_raises_unhandled_exception(
+    client: SourceCodeManagerRPCClient,
+) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
@@ -817,7 +886,7 @@ def test_invalid_json_response_raises_unhandled_exception(client: SourceCodeMana
 
 
 @responses.activate
-def test_empty_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+def test_empty_response_raises_unhandled_exception(client: SourceCodeManagerRPCClient) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
@@ -831,7 +900,9 @@ def test_empty_response_raises_unhandled_exception(client: SourceCodeManagerRPCC
 
 
 @responses.activate
-def test_invalid_json_response_data_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+def test_invalid_json_response_data_raises_unhandled_exception(
+    client: SourceCodeManagerRPCClient,
+) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
@@ -849,7 +920,7 @@ def test_invalid_json_response_data_raises_unhandled_exception(client: SourceCod
 
 
 @responses.activate
-def test_scm_coded_error_is_raised_as_is(client: SourceCodeManagerRPCClient):
+def test_scm_coded_error_is_raised_as_is(client: SourceCodeManagerRPCClient) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
@@ -880,7 +951,7 @@ def test_scm_coded_error_is_raised_as_is(client: SourceCodeManagerRPCClient):
 
 
 @responses.activate
-def test_multiple_errors_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+def test_multiple_errors_raises_unhandled_exception(client: SourceCodeManagerRPCClient) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
@@ -931,7 +1002,7 @@ def test_multiple_errors_raises_unhandled_exception(client: SourceCodeManagerRPC
 
 
 @responses.activate
-def test_scm_provider_exception_is_raised_as_is(client: SourceCodeManagerRPCClient):
+def test_scm_provider_exception_is_raised_as_is(client: SourceCodeManagerRPCClient) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
@@ -960,7 +1031,7 @@ def test_scm_provider_exception_is_raised_as_is(client: SourceCodeManagerRPCClie
 
 
 @responses.activate
-def test_scm_error_is_raised_as_is(client: SourceCodeManagerRPCClient):
+def test_scm_error_is_raised_as_is(client: SourceCodeManagerRPCClient) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
@@ -989,7 +1060,7 @@ def test_scm_error_is_raised_as_is(client: SourceCodeManagerRPCClient):
 
 
 @responses.activate
-def test_unknown_error_type_raises_unhandled_exception(client: SourceCodeManagerRPCClient):
+def test_unknown_error_type_raises_unhandled_exception(client: SourceCodeManagerRPCClient) -> None:
     responses.add(
         responses.POST,
         f"{base_url}/{prefix}/get_issue_comments_v1/",
