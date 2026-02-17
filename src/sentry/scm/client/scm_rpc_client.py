@@ -9,6 +9,7 @@ import orjson
 import pydantic
 import requests
 
+from .errors import SCMCodedError, SCMError, SCMProviderException, SCMUnhandledException
 from .types import (
     CheckRunActionResult,
     CheckRunOutput,
@@ -73,22 +74,6 @@ class _ResponseBody(pydantic.BaseModel):
 
 
 # Client interface
-
-
-class SCMError(Exception):
-    pass
-
-
-class SCMProviderException(SCMError):
-    pass
-
-
-class SCMCodedError(SCMError):
-    pass
-
-
-class SCMUnhandledException(SCMError):
-    pass
 
 
 class SourceCodeManagerRPCClient:

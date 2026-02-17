@@ -6,13 +6,13 @@ import pytest
 import requests
 import responses.matchers
 
-from sentry.scm.client.scm_rpc_client import (
+from sentry.scm.client.errors import (
     SCMCodedError,
     SCMError,
     SCMProviderException,
     SCMUnhandledException,
-    SourceCodeManagerRPCClient,
 )
+from sentry.scm.client.scm_rpc_client import SourceCodeManagerRPCClient
 from sentry.scm.client.types import (
     Author,
     CheckRun,
