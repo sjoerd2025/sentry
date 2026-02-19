@@ -391,7 +391,7 @@ class TestScmRpc(APITestCase):
                 {"args": {"organization_id": 42, "repository_id": 57}},
             )
             assert response.status_code == 500
-            assert response.json() == {"errors": [{"details": ["Blah", 68]}]}
+            assert response.json() == {"errors": [{"type": "SCMError", "details": ["Blah", 68]}]}
 
     def test_scm_coded_error_in_provider_method(self) -> None:
         with add_raise_scm_error(SCMCodedError("Blah", 68, code="repository_not_found")):
@@ -403,12 +403,13 @@ class TestScmRpc(APITestCase):
             assert response.json() == {
                 "errors": [
                     {
+                        "type": "SCMCodedError",
                         "details": [
                             "repository_not_found",
                             "A repository could not be found.",
                             "Blah",
                             68,
-                        ]
+                        ],
                     }
                 ]
             }
@@ -420,4 +421,6 @@ class TestScmRpc(APITestCase):
                 {"args": {"organization_id": 42, "repository_id": 57}},
             )
             assert response.status_code == 503
-            assert response.json() == {"errors": [{"details": ["Blah", 68]}]}
+            assert response.json() == {
+                "errors": [{"type": "SCMProviderException", "details": ["Blah", 68]}]
+            }
