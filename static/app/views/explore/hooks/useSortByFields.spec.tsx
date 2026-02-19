@@ -8,7 +8,9 @@ import type {Organization} from 'sentry/types/organization';
 import {QueryClientProvider} from 'sentry/utils/queryClient';
 import {useLocation} from 'sentry/utils/useLocation';
 import {Mode} from 'sentry/views/explore/contexts/pageParamsContext/mode';
+import type {TraceItemAttributeConfig} from 'sentry/views/explore/contexts/traceItemAttributeContext';
 import {useSortByFields} from 'sentry/views/explore/hooks/useSortByFields';
+import {TraceItemDataset} from 'sentry/views/explore/types';
 import {OrganizationContext} from 'sentry/views/organizationContext';
 
 jest.mock('sentry/utils/useLocation');
@@ -26,6 +28,10 @@ function createWrapper(organization: Organization) {
 
 describe('useSortByFields', () => {
   const organization = OrganizationFixture();
+  const spansConfig: TraceItemAttributeConfig = {
+    traceItemType: TraceItemDataset.SPANS,
+    enabled: true,
+  };
 
   beforeEach(() => {
     MockApiClient.clearMockResponses();
@@ -42,6 +48,7 @@ describe('useSortByFields', () => {
     const {result} = renderHook(
       () =>
         useSortByFields({
+          config: spansConfig,
           fields: [
             'id',
             'span.op',
@@ -73,6 +80,7 @@ describe('useSortByFields', () => {
     const {result} = renderHook(
       () =>
         useSortByFields({
+          config: spansConfig,
           fields: ['span.op', 'span.description'],
           groupBys: ['span.op'],
           yAxes: ['avg(span.duration)'],
