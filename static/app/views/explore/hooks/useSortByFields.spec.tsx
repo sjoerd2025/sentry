@@ -8,9 +8,7 @@ import type {Organization} from 'sentry/types/organization';
 import {QueryClientProvider} from 'sentry/utils/queryClient';
 import {useLocation} from 'sentry/utils/useLocation';
 import {Mode} from 'sentry/views/explore/contexts/pageParamsContext/mode';
-import {TraceItemAttributeProvider} from 'sentry/views/explore/contexts/traceItemAttributeContext';
 import {useSortByFields} from 'sentry/views/explore/hooks/useSortByFields';
-import {TraceItemDataset} from 'sentry/views/explore/types';
 import {OrganizationContext} from 'sentry/views/organizationContext';
 
 jest.mock('sentry/utils/useLocation');
@@ -20,11 +18,7 @@ function createWrapper(organization: Organization) {
   return function ({children}: {children?: React.ReactNode}) {
     return (
       <QueryClientProvider client={makeTestQueryClient()}>
-        <OrganizationContext value={organization}>
-          <TraceItemAttributeProvider traceItemType={TraceItemDataset.SPANS} enabled>
-            {children}
-          </TraceItemAttributeProvider>
-        </OrganizationContext>
+        <OrganizationContext value={organization}>{children}</OrganizationContext>
       </QueryClientProvider>
     );
   };
