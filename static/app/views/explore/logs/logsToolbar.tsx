@@ -24,10 +24,7 @@ import {
 } from 'sentry/views/explore/components/toolbar/toolbarVisualize';
 import {TypeBadge} from 'sentry/views/explore/components/typeBadge';
 import {DragNDropContext} from 'sentry/views/explore/contexts/dragNDropContext';
-import {
-  TraceItemAttributeProvider,
-  useTraceItemAttributes,
-} from 'sentry/views/explore/contexts/traceItemAttributeContext';
+import {useTraceItemAttributes} from 'sentry/views/explore/contexts/traceItemAttributeContext';
 import {
   OurLogKnownFieldKey,
   type OurLogsAggregate,
@@ -99,58 +96,43 @@ export const LOG_AGGREGATES: Array<SelectOption<OurLogsAggregate>> = [
 export function LogsToolbar() {
   return (
     <Container data-test-id="logs-toolbar">
-      <LogsToolbarVisualizeWrapper />
-      <LogsToolbarGroupByWrapper />
+      <ToolbarVisualize />
+      <ToolbarGroupBy />
     </Container>
   );
 }
 
-function LogsToolbarVisualizeWrapper() {
+function ToolbarVisualize() {
   const [search, setSearch] = useState<string | undefined>(undefined);
   const debouncedSearch = useDebouncedValue(search, 200);
-  return (
-    <TraceItemAttributeProvider
-      enabled
-      search={debouncedSearch}
-      traceItemType={TraceItemDataset.LOGS}
-    >
-      <ToolbarVisualize onSearch={setSearch} onClose={() => setSearch(undefined)} />
-    </TraceItemAttributeProvider>
+
+  const logsAttributeConfig = useMemo(
+    () => ({
+      traceItemType: TraceItemDataset.LOGS,
+      enabled: true,
+      search: debouncedSearch,
+    }),
+    [debouncedSearch]
   );
-}
 
-function LogsToolbarGroupByWrapper() {
-  const [search, setSearch] = useState<string | undefined>(undefined);
-  const debouncedSearch = useDebouncedValue(search, 200);
-  return (
-    <TraceItemAttributeProvider
-      enabled
-      search={debouncedSearch}
-      traceItemType={TraceItemDataset.LOGS}
-    >
-      <ToolbarGroupBy onSearch={setSearch} onClose={() => setSearch(undefined)} />
-    </TraceItemAttributeProvider>
-  );
-}
-
-interface LogsToolbarProps {
-  onClose: () => void;
-  onSearch: (search: string) => void;
-}
-
-function ToolbarVisualize({onSearch, onClose}: LogsToolbarProps) {
   const {attributes: stringTags, isLoading: stringTagsLoading} = useTraceItemAttributes(
+    logsAttributeConfig,
     'string',
     HiddenLogSearchFields
   );
   const {attributes: numberTags, isLoading: numberTagsLoading} = useTraceItemAttributes(
+    logsAttributeConfig,
     'number',
     HiddenLogSearchFields
   );
   const {attributes: booleanTags, isLoading: booleanTagsLoading} = useTraceItemAttributes(
+    logsAttributeConfig,
     'boolean',
     HiddenLogSearchFields
   );
+
+  const onSearch = setSearch;
+  const onClose = useCallback(() => setSearch(undefined), []);
 
   const sortedNumberKeys: string[] = useMemo(() => {
     const keys = Object.keys(numberTags);
@@ -404,19 +386,37 @@ function VisualizeDropdown({
   );
 }
 
-function ToolbarGroupBy({onSearch, onClose}: LogsToolbarProps) {
+function ToolbarGroupBy() {
+  const [search, setSearch] = useState<string | undefined>(undefined);
+  const debouncedSearch = useDebouncedValue(search, 200);
+
+  const logsAttributeConfig = useMemo(
+    () => ({
+      traceItemType: TraceItemDataset.LOGS,
+      enabled: true,
+      search: debouncedSearch,
+    }),
+    [debouncedSearch]
+  );
+
   const {attributes: numberTags, isLoading: numberTagsLoading} = useTraceItemAttributes(
+    logsAttributeConfig,
     'number',
     HiddenLogSearchFields
   );
   const {attributes: stringTags, isLoading: stringTagsLoading} = useTraceItemAttributes(
+    logsAttributeConfig,
     'string',
     HiddenLogSearchFields
   );
   const {attributes: booleanTags, isLoading: booleanTagsLoading} = useTraceItemAttributes(
+    logsAttributeConfig,
     'boolean',
     HiddenLogSearchFields
   );
+
+  const onSearch = setSearch;
+  const onClose = useCallback(() => setSearch(undefined), []);
 
   const groupBys = useQueryParamsGroupBys();
   const setGroupBys = useSetQueryParamsGroupBys();
