@@ -15,8 +15,6 @@ import {useDatePageFilterProps} from 'sentry/utils/useDatePageFilterProps';
 import {useMaxPickableDays} from 'sentry/utils/useMaxPickableDays';
 import useOrganization from 'sentry/utils/useOrganization';
 import {TraceItemSearchQueryBuilder} from 'sentry/views/explore/components/traceItemSearchQueryBuilder';
-import {TraceItemAttributeProvider} from 'sentry/views/explore/contexts/traceItemAttributeContext';
-import {TraceItemDataset} from 'sentry/views/explore/types';
 import {InsightsEnvironmentSelector} from 'sentry/views/insights/common/components/enviornmentSelector';
 import * as ModuleLayout from 'sentry/views/insights/common/components/moduleLayout';
 import {InsightsProjectSelector} from 'sentry/views/insights/common/components/projectSelector';
@@ -131,9 +129,7 @@ function PageWithProviders() {
 
   return (
     <DomainOverviewPageProviders maxPickableDays={datePageFilterProps.maxPickableDays}>
-      <TraceItemAttributeProvider traceItemType={TraceItemDataset.SPANS} enabled>
-        <McpOverviewPage datePageFilterProps={datePageFilterProps} />
-      </TraceItemAttributeProvider>
+      <McpOverviewPage datePageFilterProps={datePageFilterProps} />
     </DomainOverviewPageProviders>
   );
 }

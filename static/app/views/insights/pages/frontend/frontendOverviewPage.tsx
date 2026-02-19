@@ -59,7 +59,6 @@ import {
 } from 'sentry/views/insights/pages/frontend/settings';
 import {useFrontendQuery} from 'sentry/views/insights/pages/frontend/useFrontendQuery';
 import useHasPlatformizedFrontendOverview from 'sentry/views/insights/pages/frontend/utils/useHasPlatformizedFrontendOverview';
-import {InsightsSpanTagProvider} from 'sentry/views/insights/pages/insightsSpanTagProvider';
 import {NextJsOverviewPage} from 'sentry/views/insights/pages/platform/nextjs';
 import {useIsNextJsInsightsAvailable} from 'sentry/views/insights/pages/platform/nextjs/features';
 import {PlatformizedNextJsOverviewPage} from 'sentry/views/insights/pages/platform/nextjs/platformizedNextJsOverviewPage';
@@ -167,7 +166,7 @@ function FrontendOverviewPage({datePageFilterProps}: FrontendOverviewPageProps) 
                   <DatePageFilter {...datePageFilterProps} />
                 </PageFilterBar>
                 {!showOnboarding && (
-                  <InsightsSpanTagProvider>
+                  <Fragment>
                     <CompactSelect
                       value={spanOp}
                       menuTitle={t('Filter by operation')}
@@ -194,7 +193,7 @@ function FrontendOverviewPage({datePageFilterProps}: FrontendOverviewPageProps) 
                       }}
                       query={getFreeTextFromQuery(searchBarQuery) ?? ''}
                     />
-                  </InsightsSpanTagProvider>
+                  </Fragment>
                 )}
               </ToolRibbon>
             </ModuleLayout.Full>
