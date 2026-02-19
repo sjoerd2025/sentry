@@ -18,6 +18,7 @@ from rest_framework.exceptions import (
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from sentry.api.api_owners import ApiOwner
 from sentry.api.api_publish_status import ApiPublishStatus
 from sentry.api.authentication import AuthenticationSiloLimit, StandardAuthentication
 from sentry.api.base import Endpoint, internal_region_silo_endpoint
@@ -140,7 +141,7 @@ class ScmRpcServiceEndpoint(Endpoint):
     publish_status = {
         "POST": ApiPublishStatus.EXPERIMENTAL,
     }
-    # @todo Set owner (Vincent needs guidance from Colton)
+    owner = ApiOwner.CODING_WORKFLOWS
     authentication_classes = (ScmRpcSignatureAuthentication,)
     permission_classes = ()
     enforce_rate_limit = False
