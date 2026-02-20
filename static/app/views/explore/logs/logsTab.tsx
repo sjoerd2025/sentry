@@ -172,10 +172,10 @@ export function LogsTabContent({datePageFilterProps}: LogsTabProps) {
     limit: 50,
   });
 
-  const logsAttributeConfig: TraceItemAttributeConfig = useMemo(
-    () => ({traceItemType: TraceItemDataset.LOGS, enabled: true}),
-    []
-  );
+  const logsAttributeConfig: TraceItemAttributeConfig = {
+    traceItemType: TraceItemDataset.LOGS,
+    enabled: true,
+  };
 
   const {
     attributes: stringAttributes,

@@ -1,4 +1,4 @@
-import {useCallback, useMemo, useState} from 'react';
+import {useCallback, useState} from 'react';
 
 import type {SelectOption} from '@sentry/scraps/compactSelect';
 
@@ -79,14 +79,11 @@ function ToolbarGroupByItem({
   const [search, setSearch] = useState<string | undefined>(undefined);
   const debouncedSearch = useDebouncedValue(search, 200);
 
-  const spansConfig = useMemo(
-    () => ({
-      traceItemType: TraceItemDataset.SPANS,
-      enabled: true,
-      search: debouncedSearch,
-    }),
-    [debouncedSearch]
-  );
+  const spansConfig = {
+    traceItemType: TraceItemDataset.SPANS,
+    enabled: true,
+    search: debouncedSearch,
+  };
 
   const {tags: numberTags, isLoading: numberTagsLoading} = useTraceItemTags(
     spansConfig,
