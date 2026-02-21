@@ -141,7 +141,6 @@ type Props = {
   theme: Theme;
   children?: React.ReactNode;
   onDashboardUpdate?: (updatedDashboard: DashboardDetails) => void;
-  useTimeseriesVisualization?: boolean;
 };
 
 type State = {
@@ -1062,7 +1061,6 @@ class DashboardDetail extends Component<Props, State> {
       location,
       onDashboardUpdate,
       projects,
-      useTimeseriesVisualization,
     } = this.props;
     const {
       modifiedDashboard,
@@ -1307,9 +1305,6 @@ class DashboardDetail extends Component<Props, State> {
                                       newlyAddedWidget={newlyAddedWidget}
                                       onNewWidgetScrollComplete={
                                         this.handleScrollToNewWidgetComplete
-                                      }
-                                      useTimeseriesVisualization={
-                                        useTimeseriesVisualization
                                       }
                                     />
                                   </WidgetQueryQueueProvider>

@@ -70,7 +70,6 @@ export function PrebuiltDashboardRenderer({
         dashboard={dashboard}
         dashboards={[]}
         initialState={DashboardState.EMBEDDED}
-        useTimeseriesVisualization
       />
     </LoadingContainer>
   );

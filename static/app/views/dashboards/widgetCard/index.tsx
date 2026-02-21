@@ -115,7 +115,6 @@ type Props = WithRouterProps & {
   showLoadingText?: boolean;
   showStoredAlert?: boolean;
   tableItemLimit?: number;
-  useTimeseriesVisualization?: boolean;
   windowWidth?: number;
 };
 
@@ -178,7 +177,6 @@ function WidgetCard(props: Props) {
     onWidgetTableSort,
     onWidgetTableResizeColumn,
     disableTableActions,
-    useTimeseriesVisualization,
   } = props;
 
   if (widget.displayType === DisplayType.TOP_N) {
@@ -311,7 +309,7 @@ function WidgetCard(props: Props) {
     : undefined;
 
   const canUseTimeseriesVisualization = widgetCanUseTimeSeriesVisualization(widget);
-  if (canUseTimeseriesVisualization && useTimeseriesVisualization) {
+  if (canUseTimeseriesVisualization) {
     return (
       <ErrorBoundary
         customComponent={() => <ErrorCard>{t('Error loading widget data')}</ErrorCard>}
