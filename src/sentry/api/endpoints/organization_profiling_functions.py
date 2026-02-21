@@ -8,7 +8,6 @@ from rest_framework import serializers
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from sentry import features
 from sentry.api.api_owners import ApiOwner
 from sentry.api.api_publish_status import ApiPublishStatus
 from sentry.api.base import region_silo_endpoint
@@ -72,15 +71,7 @@ class OrganizationProfilingFunctionTrendsEndpoint(OrganizationEventsEndpointBase
         "GET": ApiPublishStatus.PRIVATE,
     }
 
-    def has_feature(self, organization: Organization, request: Request):
-        return features.has(
-            "organizations:profiling-global-suspect-functions", organization, actor=request.user
-        )
-
     def get(self, request: Request, organization: Organization) -> Response:
-        if not self.has_feature(organization, request):
-            return Response(status=404)
-
         try:
             snuba_params = self.get_snuba_params(request, organization)
         except NoProjects:
