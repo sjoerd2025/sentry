@@ -419,7 +419,7 @@ export function Onboarding({organization, project}: OnboardingProps) {
   const navigate = useNavigate();
   const {isSelfHosted, urlPrefix} = useLegacyStore(ConfigStore);
   const [received, setReceived] = useState<boolean>(false);
-  const showNewUi = organization.features.includes('tracing-onboarding-new-ui');
+  const showNewUi = true;
   const isEAPTraceEnabled = organization.features.includes('trace-spans-format');
   const tracesQuery = useTraces({
     enabled: received,
