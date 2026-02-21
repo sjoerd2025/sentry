@@ -15,7 +15,6 @@ import {
   BaseGridCell,
   FilterWrapper,
 } from 'sentry/components/searchQueryBuilder/tokens/components';
-import {DeletableToken} from 'sentry/components/searchQueryBuilder/tokens/deletableToken';
 import {UnstyledButton} from 'sentry/components/searchQueryBuilder/tokens/filter/unstyledButton';
 import {useFilterButtonProps} from 'sentry/components/searchQueryBuilder/tokens/filter/useFilterButtonProps';
 import {GridInvalidTokenTooltip} from 'sentry/components/searchQueryBuilder/tokens/invalidTokenTooltip';
@@ -27,7 +26,6 @@ import type {
 import {IconClose} from 'sentry/icons';
 import {t} from 'sentry/locale';
 import {defined} from 'sentry/utils';
-import useOrganization from 'sentry/utils/useOrganization';
 
 type SearchQueryBuilderBooleanProps = {
   item: Node<ParseResultToken>;
@@ -40,33 +38,7 @@ export function SearchQueryBuilderBoolean({
   state,
   token,
 }: SearchQueryBuilderBooleanProps) {
-  const showBooleanOpSelector = useOrganization().features.includes(
-    'search-query-builder-add-boolean-operator-select'
-  );
-
-  if (showBooleanOpSelector) {
-    return <SearchQueryBuilderBooleanSelect item={item} state={state} token={token} />;
-  }
-
-  return <SearchQueryBuilderBooleanDeletable item={item} state={state} token={token} />;
-}
-
-function SearchQueryBuilderBooleanDeletable({
-  item,
-  state,
-  token,
-}: SearchQueryBuilderBooleanProps) {
-  return (
-    <DeletableToken
-      item={item}
-      state={state}
-      token={token}
-      label={token.value}
-      invalid={token.invalid}
-    >
-      {token.text}
-    </DeletableToken>
-  );
+  return <SearchQueryBuilderBooleanSelect item={item} state={state} token={token} />;
 }
 
 function FilterDelete({token, state, item}: SearchQueryBuilderBooleanProps) {
