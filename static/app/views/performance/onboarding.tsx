@@ -419,7 +419,6 @@ export function Onboarding({organization, project}: OnboardingProps) {
   const navigate = useNavigate();
   const {isSelfHosted, urlPrefix} = useLegacyStore(ConfigStore);
   const [received, setReceived] = useState<boolean>(false);
-  const showNewUi = true;
   const isEAPTraceEnabled = organization.features.includes('trace-spans-format');
   const tracesQuery = useTraces({
     enabled: received,
@@ -469,10 +468,6 @@ export function Onboarding({organization, project}: OnboardingProps) {
     organization,
     doesNotSupportPerformance,
   ]);
-
-  if (!showNewUi) {
-    return <LegacyOnboarding organization={organization} project={project} />;
-  }
 
   const performanceDocs = docs?.performanceOnboarding;
 
