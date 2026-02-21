@@ -609,9 +609,7 @@ function BasicDiscoverRenderer(props: LogFieldRendererProps) {
 function ReplayIDRenderer(props: LogFieldRendererProps) {
   const replayId = props.item.value;
 
-  const hasFeature = props.extra.organization.features.includes('ourlogs-replay-ui');
-
-  if (typeof replayId !== 'string' || !replayId || !hasFeature) {
+  if (typeof replayId !== 'string' || !replayId) {
     return props.basicRendered;
   }
 
