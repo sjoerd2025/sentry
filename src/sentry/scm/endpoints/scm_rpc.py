@@ -265,7 +265,7 @@ scm_method_registry: dict[str, Callable] = {
     "get_pull_request_files_v1": SourceCodeManager.get_pull_request_files,
     "get_pull_request_commits_v1": SourceCodeManager.get_pull_request_commits,
     "get_pull_request_diff_v1": SourceCodeManager.get_pull_request_diff,
-    "list_pull_requests_v1": SourceCodeManager.list_pull_requests,
+    "list_pull_requests_v1": SourceCodeManager.get_pull_requests,
     "create_pull_request_v1": SourceCodeManager.create_pull_request,
     "update_pull_request_v1": SourceCodeManager.update_pull_request,
     "request_review_v1": SourceCodeManager.request_review,
