@@ -17,6 +17,7 @@ from sentry.integrations.github.blame import (
     generate_file_path_mapping,
     is_graphql_response,
 )
+from sentry.integrations.github.constants import GITHUB_API_ACCEPT_HEADER
 from sentry.integrations.github.utils import get_jwt, get_next_link
 from sentry.integrations.models.integration import Integration
 from sentry.integrations.services.integration import RpcIntegration
@@ -24,6 +25,10 @@ from sentry.integrations.source_code_management.commit_context import (
     CommitContextClient,
     FileBlameInfo,
     SourceLineInfo,
+)
+from sentry.integrations.source_code_management.metrics import (
+    SCMIntegrationInteractionEvent,
+    SCMIntegrationInteractionType,
 )
 from sentry.integrations.source_code_management.repo_trees import RepoTreesClient
 from sentry.integrations.source_code_management.repository import RepositoryClient
@@ -60,7 +65,7 @@ query GetPullRequestComments(
                     id
                     body
                     isMinimized
-                    author { login __typename }
+                    author { login databaseId __typename }
                 }
                 pageInfo { hasNextPage endCursor }
             }
@@ -87,7 +92,7 @@ query GetPullRequestComments(
                                 nodes { content }
                                 totalCount
                             }
-                            author { login __typename }
+                            author { login databaseId __typename }
                         }
                     }
                 }
@@ -177,7 +182,7 @@ class GithubSetupApiClient(IntegrationProxyClient):
             token = self.jwt
 
         prepared_request.headers["Authorization"] = f"Bearer {token}"
-        prepared_request.headers["Accept"] = "application/vnd.github+json"
+        prepared_request.headers["Accept"] = GITHUB_API_ACCEPT_HEADER
         return prepared_request
 
     def get_installation_info(self, installation_id: int | str) -> dict[str, Any]:
@@ -369,7 +374,7 @@ class GithubProxyClient(IntegrationProxyClient):
             return prepared_request
 
         prepared_request.headers["Authorization"] = f"Bearer {token}"
-        prepared_request.headers["Accept"] = "application/vnd.github+json"
+        prepared_request.headers["Accept"] = GITHUB_API_ACCEPT_HEADER
         if prepared_request.headers.get("Content-Type") == "application/raw; charset=utf-8":
             prepared_request.headers["Accept"] = "application/vnd.github.raw"
 
@@ -496,7 +501,12 @@ class GitHubBaseClient(
         """This gives information of the current rate limit"""
         # There's more but this is good enough
         assert specific_resource in ("core", "search", "graphql")
-        return GithubRateLimitInfo(self.get("/rate_limit")["resources"][specific_resource])
+        with SCMIntegrationInteractionEvent(
+            interaction_type=SCMIntegrationInteractionType.GET_RATE_LIMIT,
+            provider_key=self.integration_name,
+            integration_id=self.integration.id,
+        ).capture():
+            return GithubRateLimitInfo(self.get("/rate_limit")["resources"][specific_resource])
 
     # This method is used by RepoTreesIntegration
     def get_remaining_api_requests(self) -> int:
@@ -618,10 +628,6 @@ class GitHubBaseClient(
         """https://docs.github.com/en/rest/pulls/reviews#create-a-review-for-a-pull-request"""
         return self.post(f"/repos/{repo}/pulls/{pull_number}/reviews", data=data)
 
-    def get_check_run(self, repo: str, check_run_id: str) -> Any:
-        """https://docs.github.com/en/rest/checks/runs#get-a-check-run"""
-        return self.get(f"/repos/{repo}/check-runs/{check_run_id}")
-
     def update_check_run(self, repo: str, check_run_id: str, data: dict[str, Any]) -> Any:
         """https://docs.github.com/en/rest/checks/runs#update-a-check-run"""
         return self.patch(f"/repos/{repo}/check-runs/{check_run_id}", data=data)
@@ -641,11 +647,14 @@ class GitHubBaseClient(
             "Bad credentials",  # No permission granted for this repo
         ):
             logger.warning(error_message, extra=extra)
-        elif error_message in (
-            "Server Error",  # Github failed to respond
-            "Connection reset by peer",  # Connection reset by GitHub
-            "Connection broken: invalid chunk length",  # Connection broken by chunk with invalid length
-            "Unable to reach host:",  # Unable to reach host at the moment
+        elif (
+            error_message
+            in (
+                "Server Error",  # Github failed to respond
+                "Connection reset by peer",  # Connection reset by GitHub
+                "Connection broken: invalid chunk length",  # Connection broken by chunk with invalid length
+                "Unable to reach host:",  # Unable to reach host at the moment
+            )
         ):
             should_count_error = True
         elif error_message and error_message.startswith(
@@ -1078,6 +1087,15 @@ class GitHubBaseClient(
         """
         endpoint = f"/repos/{repo}/check-runs"
         return self.post(endpoint, data=data)
+
+    def get_check_run(self, repo: str, check_run_id: int) -> Any:
+        """
+        https://docs.github.com/en/rest/checks/runs#get-a-check-run
+
+        The repo must be in the format of "owner/repo".
+        """
+        endpoint = f"/repos/{repo}/check-runs/{check_run_id}"
+        return self.get(endpoint)
 
     def get_check_runs(self, repo: str, sha: str) -> Any:
         """

@@ -3,7 +3,7 @@ import hmac
 import logging
 import typing
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import pydantic
 import sentry_sdk
@@ -18,12 +18,14 @@ from rest_framework.exceptions import (
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from sentry.api.api_owners import ApiOwner
 from sentry.api.api_publish_status import ApiPublishStatus
 from sentry.api.authentication import AuthenticationSiloLimit, StandardAuthentication
 from sentry.api.base import Endpoint, internal_region_silo_endpoint
 from sentry.hybridcloud.rpc.service import RpcAuthenticationSetupException
 from sentry.scm.actions import SourceCodeManager
 from sentry.scm.errors import SCMCodedError, SCMError, SCMProviderException
+from sentry.scm.types import PROVIDER_SET, ProviderName
 from sentry.silo.base import SiloMode
 
 logger = logging.getLogger(__name__)
@@ -140,7 +142,7 @@ class ScmRpcServiceEndpoint(Endpoint):
     publish_status = {
         "POST": ApiPublishStatus.EXPERIMENTAL,
     }
-    # @todo Set owner (Vincent needs guidance from Colton)
+    owner = ApiOwner.CODING_WORKFLOWS
     authentication_classes = (ScmRpcSignatureAuthentication,)
     permission_classes = ()
     enforce_rate_limit = False
@@ -173,8 +175,11 @@ class ScmRpcServiceEndpoint(Endpoint):
 
         repository_id: int | tuple[str, str]
         if isinstance(request.args.repository_id, RequestData.Args.CompositeRepositoryId):
+            if request.args.repository_id.provider not in PROVIDER_SET:
+                raise SCMCodedError(code="unknown_provider")
+
             repository_id = (
-                request.args.repository_id.provider,
+                cast(ProviderName, request.args.repository_id.provider),
                 request.args.repository_id.external_id,
             )
         else:
@@ -264,7 +269,7 @@ scm_method_registry: dict[str, Callable] = {
     "get_pull_request_files_v1": SourceCodeManager.get_pull_request_files,
     "get_pull_request_commits_v1": SourceCodeManager.get_pull_request_commits,
     "get_pull_request_diff_v1": SourceCodeManager.get_pull_request_diff,
-    "list_pull_requests_v1": SourceCodeManager.list_pull_requests,
+    "list_pull_requests_v1": SourceCodeManager.get_pull_requests,
     "create_pull_request_v1": SourceCodeManager.create_pull_request,
     "update_pull_request_v1": SourceCodeManager.update_pull_request,
     "request_review_v1": SourceCodeManager.request_review,
