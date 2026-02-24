@@ -3,7 +3,7 @@ import hmac
 import logging
 import typing
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import pydantic
 import sentry_sdk
@@ -121,7 +121,7 @@ class RequestData(pydantic.BaseModel, extra=pydantic.Extra.allow):
         organization_id: int
 
         class CompositeRepositoryId(pydantic.BaseModel, extra=pydantic.Extra.forbid):
-            provider: ProviderName
+            provider: str
             external_id: str
 
         repository_id: int | CompositeRepositoryId
@@ -175,8 +175,16 @@ class ScmRpcServiceEndpoint(Endpoint):
 
         repository_id: int | tuple[str, str]
         if isinstance(request.args.repository_id, RequestData.Args.CompositeRepositoryId):
+            if request.args.repository_id.provider not in (
+                "bitbucket",
+                "github",
+                "github_enterprise",
+                "gitlab",
+            ):
+                raise SCMCodedError(code="unknown_provider")
+
             repository_id = (
-                request.args.repository_id.provider,
+                cast(ProviderName, request.args.repository_id.provider),
                 request.args.repository_id.external_id,
             )
         else:
