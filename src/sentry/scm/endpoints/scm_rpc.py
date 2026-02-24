@@ -25,7 +25,7 @@ from sentry.api.base import Endpoint, internal_region_silo_endpoint
 from sentry.hybridcloud.rpc.service import RpcAuthenticationSetupException
 from sentry.scm.actions import SourceCodeManager
 from sentry.scm.errors import SCMCodedError, SCMError, SCMProviderException
-from sentry.scm.types import ProviderName
+from sentry.scm.types import PROVIDER_SET, ProviderName
 from sentry.silo.base import SiloMode
 
 logger = logging.getLogger(__name__)
@@ -175,12 +175,7 @@ class ScmRpcServiceEndpoint(Endpoint):
 
         repository_id: int | tuple[str, str]
         if isinstance(request.args.repository_id, RequestData.Args.CompositeRepositoryId):
-            if request.args.repository_id.provider not in (
-                "bitbucket",
-                "github",
-                "github_enterprise",
-                "gitlab",
-            ):
+            if request.args.repository_id.provider not in PROVIDER_SET:
                 raise SCMCodedError(code="unknown_provider")
 
             repository_id = (

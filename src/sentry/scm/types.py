@@ -4,6 +4,8 @@ from typing import Any, Literal, Protocol, Required, TypedDict
 type ProviderName = Literal["bitbucket", "github", "github_enterprise", "gitlab"]
 """The SCM provider that owns an integration or repository."""
 
+PROVIDER_SET: set[ProviderName] = set(["bitbucket", "github", "github_enterprise", "gitlab"])
+
 type ExternalId = str
 
 type ResourceId = str
