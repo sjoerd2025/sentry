@@ -25,6 +25,7 @@ from sentry.api.base import Endpoint, internal_region_silo_endpoint
 from sentry.hybridcloud.rpc.service import RpcAuthenticationSetupException
 from sentry.scm.actions import SourceCodeManager
 from sentry.scm.errors import SCMCodedError, SCMError, SCMProviderException
+from sentry.scm.types import ProviderName
 from sentry.silo.base import SiloMode
 
 logger = logging.getLogger(__name__)
@@ -120,7 +121,7 @@ class RequestData(pydantic.BaseModel, extra=pydantic.Extra.allow):
         organization_id: int
 
         class CompositeRepositoryId(pydantic.BaseModel, extra=pydantic.Extra.forbid):
-            provider: str
+            provider: ProviderName
             external_id: str
 
         repository_id: int | CompositeRepositoryId
