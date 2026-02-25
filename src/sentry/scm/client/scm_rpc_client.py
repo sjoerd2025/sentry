@@ -3,35 +3,40 @@ from __future__ import annotations
 import hashlib
 import hmac
 from enum import Enum
-from typing import Any, TypedDict, overload
+from typing import Any, TypedDict
 
 import orjson
 import pydantic
 import requests
 
 from .errors import SCMCodedError, SCMError, SCMProviderException, SCMUnhandledException
+from .private import parsers
 from .types import (
-    CheckRunActionResult,
+    ActionResult,
+    BuildConclusion,
+    BuildStatus,
+    CheckRun,
     CheckRunOutput,
-    CommentActionResult,
-    CommitActionResult,
-    CommitComparisonActionResult,
-    FileContentActionResult,
-    GitBlobActionResult,
-    GitCommitObjectActionResult,
-    GitRefActionResult,
-    GitTreeActionResult,
+    Comment,
+    Commit,
+    CommitComparison,
+    FileContent,
+    GitBlob,
+    GitCommitObject,
+    GitRef,
+    GitTree,
     InputTreeEntry,
-    PullRequestActionResult,
-    PullRequestCommitActionResult,
-    PullRequestDiffActionResult,
-    PullRequestFileActionResult,
+    ProviderName,
+    PullRequest,
+    PullRequestCommit,
+    PullRequestFile,
     Reaction,
     ReactionResult,
     RepositoryId,
-    ReviewActionResult,
-    ReviewCommentActionResult,
+    Review,
+    ReviewComment,
     ReviewCommentInput,
+    ReviewSide,
 )
 
 # Implementation details
@@ -68,8 +73,14 @@ class _Unset(Enum):
     UNSET = "unset"
 
 
+class _ResponseBodyData(pydantic.BaseModel):
+    data: Any
+    type: ProviderName
+    raw: dict[str, Any]
+
+
 class _ResponseBody(pydantic.BaseModel):
-    data: Any | _Unset = _Unset.UNSET
+    data: _ResponseBodyData | None | _Unset = _Unset.UNSET
     errors: list[_Error] | _Unset = _Unset.UNSET
 
 
@@ -153,15 +164,104 @@ class SourceCodeManagerRPCClient:
         if self._owns_session:
             self._session.close()
 
-    @overload
-    def _call[T](self, method: str, method_args: dict[str, Any], return_type: None) -> None: ...
+    class _Response:
+        def __init__(self, response_: requests.Response):
+            self.response = response_
+            self.response_for_unhandled: Any = self.response.text
 
-    @overload
-    def _call[T](self, method: str, method_args: dict[str, Any], return_type: type[T]) -> T: ...
+            try:
+                response_json = self.response.json()
+            except requests.exceptions.JSONDecodeError as e:
+                raise self._unhandled("Response was not JSON") from e
 
-    def _call[T](
-        self, method: str, method_args: dict[str, Any], return_type: type[T] | None
-    ) -> T | None:
+            self.response_for_unhandled = response_json
+
+            try:
+                response_body = _ResponseBody.parse_obj(response_json)
+            except pydantic.ValidationError as e:
+                raise self._unhandled("Response did not match expected schema") from e
+
+            if response_body.errors is not _Unset.UNSET:
+                exceptions: list[SCMError] = []
+                for error in response_body.errors:
+                    if error.type == "SCMCodedError":
+                        exceptions.append(SCMCodedError(*error.details))
+                    elif error.type == "SCMProviderException":
+                        exceptions.append(SCMProviderException(*error.details))
+                    elif error.type == "SCMError":
+                        exceptions.append(SCMError(*error.details))
+                    else:
+                        exceptions.append(self._unhandled(f"Unknown error type: {error.type}"))
+                if len(exceptions) == 1:
+                    raise exceptions[0]
+                else:
+                    raise self._unhandled("Multiple errors returned")
+            elif response_body.data is _Unset.UNSET:
+                raise self._unhandled("Response did not match expected schema")
+            else:
+                self.response_body_data = response_body.data
+
+        def _unhandled(self, message: str) -> SCMUnhandledException:
+            return SCMUnhandledException(
+                message, self.response.status_code, self.response_for_unhandled
+            )
+
+        def _unhandled_return_type(self) -> SCMUnhandledException:
+            return self._unhandled("Response data did not match expected return type")
+
+        def to_list[T](
+            self, item_parser: type[pydantic.BaseModel], item_type: type[T]
+        ) -> ActionResult[list[T]]:
+            if self.response_body_data is None:
+                raise self._unhandled_return_type()
+            if not isinstance(self.response_body_data.data, list):
+                raise self._unhandled_return_type()
+            return ActionResult[list[T]](
+                data=[
+                    self._convert_item(item, item_parser, item_type)
+                    for item in self.response_body_data.data
+                ],
+                type=self.response_body_data.type,
+                raw=self.response_body_data.raw,
+            )
+
+        def to_item[T](
+            self, item_parser: type[pydantic.BaseModel], item_type: type[T]
+        ) -> ActionResult[T]:
+            if self.response_body_data is None:
+                raise self._unhandled_return_type()
+            return ActionResult[T](
+                data=self._convert_item(self.response_body_data.data, item_parser, item_type),
+                type=self.response_body_data.type,
+                raw=self.response_body_data.raw,
+            )
+
+        def to_none(self) -> None:
+            if self.response_body_data is not None:
+                raise self._unhandled_return_type()
+            return None
+
+        def to_string(self) -> ActionResult[str]:
+            if self.response_body_data is None:
+                raise self._unhandled_return_type()
+            if not isinstance(self.response_body_data.data, str):
+                raise self._unhandled_return_type()
+            return ActionResult[str](
+                data=self.response_body_data.data,
+                type=self.response_body_data.type,
+                raw=self.response_body_data.raw,
+            )
+
+        def _convert_item[T](
+            self, item: Any, item_parser: type[pydantic.BaseModel], item_type: type[T]
+        ) -> T:
+            try:
+                parsed = pydantic.parse_obj_as(item_parser, item)
+            except pydantic.ValidationError as e:
+                raise self._unhandled_return_type() from e
+            return item_type(**parsed.dict())
+
+    def _call(self, method: str, method_args: dict[str, Any]) -> _Response:
         url = f"{self._base_url}/{self.API_PREFIX}/{method}/"
         body = orjson.dumps({"args": self._basic_args | method_args})
         signature = _generate_request_signature(self._shared_secret, url, body=body)
@@ -169,283 +269,273 @@ class SourceCodeManagerRPCClient:
             "Authorization": f"rpcsignature {signature}",
             "Content-Type": "application/json",
         }
+        return self._Response(self._session.post(url, data=body, headers=headers))
 
-        response = self._session.post(url, data=body, headers=headers)
-
-        try:
-            response_json = response.json()
-        except requests.exceptions.JSONDecodeError as e:
-            raise SCMUnhandledException(
-                "Response was not JSON", response.status_code, response.text
-            ) from e
-
-        try:
-            response_body = _ResponseBody.parse_obj(response_json)
-        except pydantic.ValidationError as e:
-            raise SCMUnhandledException(
-                "Response did not match expected schema", response.status_code, response_json
-            ) from e
-
-        if response_body.errors is not _Unset.UNSET:
-            exceptions: list[SCMError] = []
-            for error in response_body.errors:
-                if error.type == "SCMCodedError":
-                    exceptions.append(SCMCodedError(*error.details))
-                elif error.type == "SCMProviderException":
-                    exceptions.append(SCMProviderException(*error.details))
-                elif error.type == "SCMError":
-                    exceptions.append(SCMError(*error.details))
-                else:
-                    exceptions.append(
-                        SCMUnhandledException(
-                            f"Unknown error type: {error.type}", response.status_code, error.details
-                        )
-                    )
-            if len(exceptions) == 1:
-                raise exceptions[0]
-            else:
-                raise SCMUnhandledException(
-                    "Multiple errors returned", response.status_code, exceptions
-                )
-        elif response_body.data is _Unset.UNSET:
-            raise SCMUnhandledException(
-                "Response did not match expected schema", response.status_code, response_json
-            )
-        else:
-            if return_type is None:
-                return None
-            else:
-                try:
-                    return pydantic.parse_obj_as(return_type, response_body.data)
-                except pydantic.ValidationError as e:
-                    raise SCMUnhandledException(
-                        "Response data did not match expected return type",
-                        response.status_code,
-                        response_json,
-                    ) from e
-
-    def get_issue_comments(self, issue_id: str) -> list[CommentActionResult]:
-        return self._call(
-            "get_issue_comments_v1", {"issue_id": issue_id}, list[CommentActionResult]
+    def get_issue_comments(self, issue_id: str) -> ActionResult[list[Comment]]:
+        """Get comments on an issue."""
+        return self._call("get_issue_comments_v1", {"issue_id": issue_id}).to_list(
+            parsers.Comment, Comment
         )
 
-    def create_issue_comment(self, issue_id: str, body: str) -> None:
-        return self._call("create_issue_comment_v1", {"issue_id": issue_id, "body": body}, None)
+    def create_issue_comment(self, issue_id: str, body: str) -> ActionResult[Comment]:
+        """Create a comment on an issue."""
+        return self._call("create_issue_comment_v1", {"issue_id": issue_id, "body": body}).to_item(
+            parsers.Comment, Comment
+        )
 
     def delete_issue_comment(self, comment_id: str) -> None:
-        return self._call("delete_issue_comment_v1", {"comment_id": comment_id}, None)
+        """Delete a comment on an issue."""
+        return self._call("delete_issue_comment_v1", {"comment_id": comment_id}).to_none()
 
-    def get_pull_request(self, pull_request_id: str) -> PullRequestActionResult:
+    def get_pull_request(self, pull_request_id: str) -> ActionResult[PullRequest]:
+        """Get a pull request."""
         return self._call(
-            "get_pull_request_v1", {"pull_request_id": pull_request_id}, PullRequestActionResult
-        )
+            "get_pull_request_v1",
+            {"pull_request_id": pull_request_id},
+        ).to_item(parsers.PullRequest, PullRequest)
 
-    def get_pull_request_comments(self, pull_request_id: str) -> list[CommentActionResult]:
+    def get_pull_request_comments(self, pull_request_id: str) -> ActionResult[list[Comment]]:
+        """Get comments on a pull request."""
         return self._call(
             "get_pull_request_comments_v1",
             {"pull_request_id": pull_request_id},
-            list[CommentActionResult],
-        )
+        ).to_list(parsers.Comment, Comment)
 
-    def create_pull_request_comment(self, pull_request_id: str, body: str) -> None:
+    def create_pull_request_comment(self, pull_request_id: str, body: str) -> ActionResult[Comment]:
+        """Create a comment on a pull request."""
         return self._call(
             "create_pull_request_comment_v1",
             {"pull_request_id": pull_request_id, "body": body},
-            None,
-        )
+        ).to_item(parsers.Comment, Comment)
 
     def delete_pull_request_comment(self, comment_id: str) -> None:
-        return self._call("delete_pull_request_comment_v1", {"comment_id": comment_id}, None)
+        """Delete a comment on a pull request."""
+        return self._call("delete_pull_request_comment_v1", {"comment_id": comment_id}).to_none()
 
-    def get_issue_comment_reactions(self, comment_id: str) -> list[ReactionResult]:
-        return self._call(
-            "get_issue_comment_reactions_v1", {"comment_id": comment_id}, list[ReactionResult]
+    def get_issue_comment_reactions(self, comment_id: str) -> ActionResult[list[ReactionResult]]:
+        """Get reactions on an issue comment."""
+        return self._call("get_issue_comment_reactions_v1", {"comment_id": comment_id}).to_list(
+            parsers.ReactionResult, ReactionResult
         )
 
-    def create_issue_comment_reaction(self, comment_id: str, reaction: Reaction) -> None:
+    def create_issue_comment_reaction(
+        self, comment_id: str, reaction: Reaction
+    ) -> ActionResult[ReactionResult]:
+        """Create a reaction on an issue comment."""
         return self._call(
             "create_issue_comment_reaction_v1",
             {"comment_id": comment_id, "reaction": reaction},
-            None,
-        )
+        ).to_item(parsers.ReactionResult, ReactionResult)
 
     def delete_issue_comment_reaction(self, comment_id: str, reaction_id: str) -> None:
+        """Delete a reaction on an issue comment."""
         return self._call(
             "delete_issue_comment_reaction_v1",
             {"comment_id": comment_id, "reaction_id": reaction_id},
-            None,
-        )
+        ).to_none()
 
-    def get_pull_request_comment_reactions(self, comment_id: str) -> list[ReactionResult]:
+    def get_pull_request_comment_reactions(
+        self, comment_id: str
+    ) -> ActionResult[list[ReactionResult]]:
+        """Get reactions on a pull request comment."""
         return self._call(
             "get_pull_request_comment_reactions_v1",
             {"comment_id": comment_id},
-            list[ReactionResult],
-        )
+        ).to_list(parsers.ReactionResult, ReactionResult)
 
-    def create_pull_request_comment_reaction(self, comment_id: str, reaction: Reaction) -> None:
+    def create_pull_request_comment_reaction(
+        self, comment_id: str, reaction: Reaction
+    ) -> ActionResult[ReactionResult]:
+        """Create a reaction on a pull request comment."""
         return self._call(
             "create_pull_request_comment_reaction_v1",
             {"comment_id": comment_id, "reaction": reaction},
-            None,
-        )
+        ).to_item(parsers.ReactionResult, ReactionResult)
 
     def delete_pull_request_comment_reaction(self, comment_id: str, reaction_id: str) -> None:
+        """Delete a reaction on a pull request comment."""
         return self._call(
             "delete_pull_request_comment_reaction_v1",
             {"comment_id": comment_id, "reaction_id": reaction_id},
-            None,
+        ).to_none()
+
+    def get_issue_reactions(self, issue_id: str) -> ActionResult[list[ReactionResult]]:
+        """Get reactions on an issue."""
+        return self._call("get_issue_reactions_v1", {"issue_id": issue_id}).to_list(
+            parsers.ReactionResult, ReactionResult
         )
 
-    def get_issue_reactions(self, issue_id: str) -> list[ReactionResult]:
-        return self._call("get_issue_reactions_v1", {"issue_id": issue_id}, list[ReactionResult])
-
-    def create_issue_reaction(self, issue_id: str, reaction: Reaction) -> None:
+    def create_issue_reaction(
+        self, issue_id: str, reaction: Reaction
+    ) -> ActionResult[ReactionResult]:
+        """Create a reaction on an issue."""
         return self._call(
-            "create_issue_reaction_v1", {"issue_id": issue_id, "reaction": reaction}, None
-        )
+            "create_issue_reaction_v1", {"issue_id": issue_id, "reaction": reaction}
+        ).to_item(parsers.ReactionResult, ReactionResult)
 
     def delete_issue_reaction(self, issue_id: str, reaction_id: str) -> None:
+        """Delete a reaction on an issue."""
         return self._call(
-            "delete_issue_reaction_v1", {"issue_id": issue_id, "reaction_id": reaction_id}, None
-        )
+            "delete_issue_reaction_v1", {"issue_id": issue_id, "reaction_id": reaction_id}
+        ).to_none()
 
-    def get_pull_request_reactions(self, pull_request_id: str) -> list[ReactionResult]:
+    def get_pull_request_reactions(
+        self, pull_request_id: str
+    ) -> ActionResult[list[ReactionResult]]:
+        """Get reactions on a pull request."""
         return self._call(
             "get_pull_request_reactions_v1",
             {"pull_request_id": pull_request_id},
-            list[ReactionResult],
-        )
+        ).to_list(parsers.ReactionResult, ReactionResult)
 
-    def create_pull_request_reaction(self, pull_request_id: str, reaction: Reaction) -> None:
+    def create_pull_request_reaction(
+        self, pull_request_id: str, reaction: Reaction
+    ) -> ActionResult[ReactionResult]:
+        """Create a reaction on a pull request."""
         return self._call(
             "create_pull_request_reaction_v1",
             {"pull_request_id": pull_request_id, "reaction": reaction},
-            None,
-        )
+        ).to_item(parsers.ReactionResult, ReactionResult)
 
     def delete_pull_request_reaction(self, pull_request_id: str, reaction_id: str) -> None:
+        """Delete a reaction on a pull request."""
         return self._call(
             "delete_pull_request_reaction_v1",
             {"pull_request_id": pull_request_id, "reaction_id": reaction_id},
-            None,
+        ).to_none()
+
+    def get_branch(self, branch: str) -> ActionResult[GitRef]:
+        """Get a branch reference."""
+        return self._call("get_branch_v1", {"branch": branch}).to_item(parsers.GitRef, GitRef)
+
+    def create_branch(self, branch: str, sha: str) -> ActionResult[GitRef]:
+        """Create a new branch pointing at the given SHA."""
+        return self._call("create_branch_v1", {"branch": branch, "sha": sha}).to_item(
+            parsers.GitRef, GitRef
         )
-
-    def get_branch(self, branch: str) -> GitRefActionResult:
-        return self._call("get_branch_v1", {"branch": branch}, GitRefActionResult)
-
-    def create_branch(self, branch: str, sha: str) -> GitRefActionResult:
-        return self._call("create_branch_v1", {"branch": branch, "sha": sha}, GitRefActionResult)
 
     def update_branch(self, branch: str, sha: str, force: bool = False) -> None:
-        return self._call("update_branch_v1", {"branch": branch, "sha": sha, "force": force}, None)
-
-    def create_git_blob(self, content: str, encoding: str) -> GitBlobActionResult:
+        """Update a branch to point at a new SHA."""
         return self._call(
-            "create_git_blob_v1", {"content": content, "encoding": encoding}, GitBlobActionResult
+            "update_branch_v1", {"branch": branch, "sha": sha, "force": force}
+        ).to_none()
+
+    def create_git_blob(self, content: str, encoding: str) -> ActionResult[GitBlob]:
+        """Create a git blob object."""
+        return self._call("create_git_blob_v1", {"content": content, "encoding": encoding}).to_item(
+            parsers.GitBlob, GitBlob
         )
 
-    def get_file_content(self, path: str, ref: str | None = None) -> FileContentActionResult:
-        return self._call(
-            "get_file_content_v1", {"path": path, "ref": ref}, FileContentActionResult
+    def get_file_content(self, path: str, ref: str | None = None) -> ActionResult[FileContent]:
+        return self._call("get_file_content_v1", {"path": path, "ref": ref}).to_item(
+            parsers.FileContent, FileContent
         )
 
-    def get_commit(self, sha: str) -> CommitActionResult:
-        return self._call("get_commit_v1", {"sha": sha}, CommitActionResult)
+    def get_commit(self, sha: str) -> ActionResult[Commit]:
+        return self._call("get_commit_v1", {"sha": sha}).to_item(parsers.Commit, Commit)
 
     def get_commits(
-        self, *, sha: str | None = None, path: str | None = None
-    ) -> list[CommitActionResult]:
-        return self._call("get_commits_v1", {"sha": sha, "path": path}, list[CommitActionResult])
+        self,
+        sha: str | None = None,
+        path: str | None = None,
+    ) -> ActionResult[list[Commit]]:
+        return self._call("get_commits_v1", {"sha": sha, "path": path}).to_list(
+            parsers.Commit, Commit
+        )
 
-    def compare_commits(self, start_sha: str, end_sha: str) -> CommitComparisonActionResult:
+    def compare_commits(self, start_sha: str, end_sha: str) -> ActionResult[CommitComparison]:
         return self._call(
             "compare_commits_v1",
             {"start_sha": start_sha, "end_sha": end_sha},
-            CommitComparisonActionResult,
+        ).to_item(parsers.CommitComparison, CommitComparison)
+
+    def get_tree(self, tree_sha: str, recursive: bool = True) -> ActionResult[GitTree]:
+        return self._call("get_tree_v1", {"tree_sha": tree_sha, "recursive": recursive}).to_item(
+            parsers.GitTree, GitTree
         )
 
-    def get_tree(self, tree_sha: str, *, recursive: bool = True) -> GitTreeActionResult:
-        return self._call(
-            "get_tree_v1", {"tree_sha": tree_sha, "recursive": recursive}, GitTreeActionResult
+    def get_git_commit(self, sha: str) -> ActionResult[GitCommitObject]:
+        return self._call("get_git_commit_v1", {"sha": sha}).to_item(
+            parsers.GitCommitObject, GitCommitObject
         )
-
-    def get_git_commit(self, sha: str) -> GitCommitObjectActionResult:
-        return self._call("get_git_commit_v1", {"sha": sha}, GitCommitObjectActionResult)
 
     def create_git_tree(
-        self, tree: list[InputTreeEntry], *, base_tree: str | None = None
-    ) -> GitTreeActionResult:
+        self,
+        tree: list[InputTreeEntry],
+        base_tree: str | None = None,
+    ) -> ActionResult[GitTree]:
         return self._call(
             "create_git_tree_v1",
-            {"tree": [entry.dict() for entry in tree], "base_tree": base_tree},
-            GitTreeActionResult,
-        )
+            {"tree": tree, "base_tree": base_tree},
+        ).to_item(parsers.GitTree, GitTree)
 
     def create_git_commit(
         self, message: str, tree_sha: str, parent_shas: list[str]
-    ) -> GitCommitObjectActionResult:
+    ) -> ActionResult[GitCommitObject]:
         return self._call(
             "create_git_commit_v1",
             {"message": message, "tree_sha": tree_sha, "parent_shas": parent_shas},
-            GitCommitObjectActionResult,
-        )
+        ).to_item(parsers.GitCommitObject, GitCommitObject)
 
-    def get_pull_request_files(self, pull_request_id: str) -> PullRequestFileActionResult:
+    def get_pull_request_files(self, pull_request_id: str) -> ActionResult[list[PullRequestFile]]:
         return self._call(
             "get_pull_request_files_v1",
             {"pull_request_id": pull_request_id},
-            PullRequestFileActionResult,
-        )
+        ).to_list(parsers.PullRequestFile, PullRequestFile)
 
-    def get_pull_request_commits(self, pull_request_id: str) -> PullRequestCommitActionResult:
+    def get_pull_request_commits(
+        self, pull_request_id: str
+    ) -> ActionResult[list[PullRequestCommit]]:
         return self._call(
             "get_pull_request_commits_v1",
             {"pull_request_id": pull_request_id},
-            PullRequestCommitActionResult,
-        )
+        ).to_list(parsers.PullRequestCommit, PullRequestCommit)
 
-    def get_pull_request_diff(self, pull_request_id: str) -> PullRequestDiffActionResult:
+    def get_pull_request_diff(self, pull_request_id: str) -> ActionResult[str]:
         return self._call(
             "get_pull_request_diff_v1",
             {"pull_request_id": pull_request_id},
-            PullRequestDiffActionResult,
-        )
+        ).to_string()
 
-    def list_pull_requests(
-        self, state: str = "open", head: str | None = None
-    ) -> list[PullRequestActionResult]:
+    def get_pull_requests(
+        self,
+        state: str = "open",
+        head: str | None = None,
+    ) -> ActionResult[list[PullRequest]]:
         return self._call(
-            "list_pull_requests_v1", {"state": state, "head": head}, list[PullRequestActionResult]
-        )
+            "get_pull_requests_v1",
+            {"state": state, "head": head},
+        ).to_list(parsers.PullRequest, PullRequest)
 
     def create_pull_request(
-        self, title: str, body: str, head: str, base: str, *, draft: bool = False
-    ) -> PullRequestActionResult:
+        self,
+        title: str,
+        body: str,
+        head: str,
+        base: str,
+        draft: bool = False,
+    ) -> ActionResult[PullRequest]:
         return self._call(
             "create_pull_request_v1",
             {"title": title, "body": body, "head": head, "base": base, "draft": draft},
-            PullRequestActionResult,
-        )
+        ).to_item(parsers.PullRequest, PullRequest)
 
     def update_pull_request(
         self,
         pull_request_id: str,
-        *,
         title: str | None = None,
         body: str | None = None,
         state: str | None = None,
-    ) -> PullRequestActionResult:
+    ) -> ActionResult[PullRequest]:
         return self._call(
             "update_pull_request_v1",
             {"pull_request_id": pull_request_id, "title": title, "body": body, "state": state},
-            PullRequestActionResult,
-        )
+        ).to_item(parsers.PullRequest, PullRequest)
 
     def request_review(self, pull_request_id: str, reviewers: list[str]) -> None:
         return self._call(
-            "request_review_v1", {"pull_request_id": pull_request_id, "reviewers": reviewers}, None
-        )
+            "request_review_v1", {"pull_request_id": pull_request_id, "reviewers": reviewers}
+        ).to_none()
 
     def create_review_comment(
         self,
@@ -453,12 +543,11 @@ class SourceCodeManagerRPCClient:
         body: str,
         commit_sha: str,
         path: str,
-        *,
         line: int | None = None,
-        side: str | None = None,
+        side: ReviewSide | None = None,
         start_line: int | None = None,
-        start_side: str | None = None,
-    ) -> ReviewCommentActionResult:
+        start_side: ReviewSide | None = None,
+    ) -> ActionResult[ReviewComment]:
         return self._call(
             "create_review_comment_v1",
             {
@@ -471,8 +560,7 @@ class SourceCodeManagerRPCClient:
                 "start_line": start_line,
                 "start_side": start_side,
             },
-            ReviewCommentActionResult,
-        )
+        ).to_item(parsers.ReviewComment, ReviewComment)
 
     def create_review(
         self,
@@ -480,33 +568,30 @@ class SourceCodeManagerRPCClient:
         commit_sha: str,
         event: str,
         comments: list[ReviewCommentInput],
-        *,
         body: str | None = None,
-    ) -> ReviewActionResult:
+    ) -> ActionResult[Review]:
         return self._call(
             "create_review_v1",
             {
                 "pull_request_id": pull_request_id,
                 "commit_sha": commit_sha,
                 "event": event,
-                "comments": [c.dict() for c in comments],
+                "comments": comments,
                 "body": body,
             },
-            ReviewActionResult,
-        )
+        ).to_item(parsers.Review, Review)
 
     def create_check_run(
         self,
         name: str,
         head_sha: str,
-        *,
-        status: str | None = None,
-        conclusion: str | None = None,
+        status: BuildStatus | None = None,
+        conclusion: BuildConclusion | None = None,
         external_id: str | None = None,
         started_at: str | None = None,
         completed_at: str | None = None,
         output: CheckRunOutput | None = None,
-    ) -> CheckRunActionResult:
+    ) -> ActionResult[CheckRun]:
         return self._call(
             "create_check_run_v1",
             {
@@ -517,37 +602,36 @@ class SourceCodeManagerRPCClient:
                 "external_id": external_id,
                 "started_at": started_at,
                 "completed_at": completed_at,
-                "output": output.dict() if output else None,
+                "output": output,
             },
-            CheckRunActionResult,
-        )
+        ).to_item(parsers.CheckRun, CheckRun)
 
-    def get_check_run(self, check_run_id: str) -> CheckRunActionResult:
-        return self._call("get_check_run_v1", {"check_run_id": check_run_id}, CheckRunActionResult)
+    def get_check_run(self, check_run_id: str) -> ActionResult[CheckRun]:
+        return self._call("get_check_run_v1", {"check_run_id": check_run_id}).to_item(
+            parsers.CheckRun, CheckRun
+        )
 
     def update_check_run(
         self,
         check_run_id: str,
-        *,
-        status: str | None = None,
-        conclusion: str | None = None,
+        status: BuildStatus | None = None,
+        conclusion: BuildConclusion | None = None,
         output: CheckRunOutput | None = None,
-    ) -> CheckRunActionResult:
+    ) -> ActionResult[CheckRun]:
         return self._call(
             "update_check_run_v1",
             {
                 "check_run_id": check_run_id,
                 "status": status,
                 "conclusion": conclusion,
-                "output": output.dict() if output else None,
+                "output": output,
             },
-            CheckRunActionResult,
-        )
+        ).to_item(parsers.CheckRun, CheckRun)
 
     def minimize_comment(self, comment_node_id: str, reason: str) -> None:
         return self._call(
-            "minimize_comment_v1", {"comment_node_id": comment_node_id, "reason": reason}, None
-        )
+            "minimize_comment_v1", {"comment_node_id": comment_node_id, "reason": reason}
+        ).to_none()
 
     def resolve_review_thread(self, thread_node_id: str) -> None:
-        return self._call("resolve_review_thread_v1", {"thread_node_id": thread_node_id}, None)
+        return self._call("resolve_review_thread_v1", {"thread_node_id": thread_node_id}).to_none()
