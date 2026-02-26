@@ -46,8 +46,17 @@ class SlackEntrypointCachePayload(TypedDict):
     threads: list[SlackThreadDetails]
 
 
+class SlackExplorerCachePayload(TypedDict):
+    organization_id: int
+    project_id: int
+    group_id: int
+    integration_id: int
+    group_link: str
+    threads: list[SlackThreadDetails]
+
+
 @entrypoint_registry.register(key=SeerEntrypointKey.SLACK)
-class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackEntrypointCachePayload]):
+class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerCachePayload]):
     key = SeerEntrypointKey.SLACK
     autofix_stopping_point: AutofixStoppingPoint = AutofixStoppingPoint.ROOT_CAUSE
 
@@ -155,8 +164,8 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackEntrypoin
     def on_trigger_explorer_success(self, *, run_id: int) -> None:
         return None
 
-    def create_explorer_cache_payload(self) -> SlackEntrypointCachePayload:
-        return SlackEntrypointCachePayload(
+    def create_explorer_cache_payload(self) -> SlackExplorerCachePayload:
+        return SlackExplorerCachePayload(
             threads=[self.thread],
             organization_id=self.organization_id,
             integration_id=self.install.model.id,
@@ -166,7 +175,7 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackEntrypoin
         )
 
     @staticmethod
-    def on_explorer_update(cache_payload: SlackEntrypointCachePayload) -> None:
+    def on_explorer_update(cache_payload: SlackExplorerCachePayload) -> None:
         return None
 
     def on_trigger_autofix_error(self, *, error: str) -> None:
