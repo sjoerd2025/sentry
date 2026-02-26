@@ -164,6 +164,7 @@ class Repository(TypedDict):
     name: str
     organization_id: int
     status: int
+    external_id: str | None
 
 
 class GitRef(TypedDict):

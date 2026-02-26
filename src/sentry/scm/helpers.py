@@ -9,6 +9,7 @@ from sentry.integrations.services.integration.service import integration_service
 from sentry.models.repository import Repository as RepositoryModel
 from sentry.scm.errors import SCMCodedError, SCMError, SCMUnhandledException
 from sentry.scm.private.providers.github import GitHubProvider
+from sentry.scm.private.providers.gitlab import GitLabProvider
 from sentry.scm.types import ExternalId, Provider, ProviderName, Referrer, Repository, RepositoryId
 
 
@@ -65,6 +66,8 @@ def map_integration_to_provider(
 
     if integration.provider == "github":
         return GitHubProvider(client, repository)
+    elif integration.provider == "gitlab":
+        return GitLabProvider(client, repository)
     else:
         raise SCMCodedError(integration.provider, code="integration_not_found")
 
@@ -75,6 +78,7 @@ def map_repository_model_to_repository(repository: RepositoryModel) -> Repositor
         "name": repository.name,
         "organization_id": repository.organization_id,
         "status": repository.status,
+        "external_id": repository.external_id,
     }
 
 

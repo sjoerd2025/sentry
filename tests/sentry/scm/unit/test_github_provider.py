@@ -38,6 +38,7 @@ def make_repository() -> Repository:
         "name": "test-org/test-repo",
         "organization_id": 1,
         "status": ObjectStatus.ACTIVE,
+        "external_id": None,
     }
 
 

@@ -24,6 +24,7 @@ def fetch_repository(oid, rid) -> Repository:
         "name": "test",
         "organization_id": 1,
         "status": ObjectStatus.ACTIVE,
+        "external_id": None,
     }
 
 
@@ -147,6 +148,7 @@ def test_repository_inactive(method: str, kwargs: dict[str, Any]):
             "name": "test",
             "organization_id": 1,
             "status": ObjectStatus.DISABLED,
+            "external_id": None,
         },
     )
 
@@ -585,6 +587,7 @@ def test_active_repository_with_int_status_is_not_rejected():
             "name": "test",
             "organization_id": 1,
             "status": ObjectStatus.ACTIVE,
+            "external_id": None,
         },
         fetch_service_provider=lambda _a, _b: BaseTestProvider(),
     )
