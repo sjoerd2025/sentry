@@ -112,13 +112,13 @@ def parse_github_repo_url(repo_url: str) -> tuple[str, str] | None:
     if repo_url.startswith("git@github.com:"):
         # SSH format: git@github.com:owner/repo.git
         path = repo_url.replace("git@github.com:", "")
-        path = path.rstrip(".git")
+        path = path.removesuffix(".git")
     elif "github.com" in repo_url:
         # HTTPS format
         parts = repo_url.split("github.com/")
         if len(parts) != 2:
             return None
-        path = parts[1].rstrip("/").rstrip(".git")
+        path = parts[1].rstrip("/").removesuffix(".git")
     else:
         return None
 
@@ -145,4 +145,4 @@ def map_session_status(claude_status: str) -> str:
         "idle": "completed",
         "closed": "completed",
     }
-    return status_mapping.get(claude_status.lower(), "unknown")
+    return status_mapping.get(claude_status.lower(), "running")
