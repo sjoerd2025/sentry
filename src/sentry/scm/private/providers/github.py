@@ -301,7 +301,7 @@ class GitHubProvider:
     @catch_provider_exception
     def compare_commits(self, start_sha: str, end_sha: str) -> ActionResult[CommitComparison]:
         raw = self.client.compare_commits(self.repository["name"], start_sha, end_sha)
-        return map_action(raw, map_commit_comparison)  # type: ignore[arg-type]
+        return map_action(raw, map_commit_comparison)
 
     @catch_provider_exception
     def get_tree(self, tree_sha: str, recursive: bool = True) -> ActionResult[GitTree]:
