@@ -21,6 +21,7 @@ from sentry.seer.entrypoints.slack.messaging import (
     update_existing_message,
 )
 from sentry.seer.entrypoints.types import SeerEntrypoint, SeerEntrypointKey
+from sentry.seer.explorer.client_utils import has_seer_explorer_access_with_detail
 from sentry.sentry_apps.metrics import SentryAppEventType
 from sentry.utils import metrics
 from sentry.utils.locking import UnableToAcquireLock
@@ -133,6 +134,15 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
             f"autofix:entrypoint:{SeerEntrypointKey.SLACK.value}:{group_id}:{stopping_point.value}"
         )
 
+    @staticmethod
+    def has_explorer_access(organization: Organization) -> bool:
+        has_seer_slack_feature_flag = features.has(
+            "organizations:seer-slack-workflows", organization
+        )
+        return has_seer_slack_feature_flag and has_seer_explorer_access_with_detail(
+            organization, None
+        )
+
     def _update_existing_message(
         self, *, run_id: int, has_complete_stage: bool, include_user: bool
     ) -> None:
@@ -159,10 +169,19 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
 
     # TODO(ISWF-2025): Implement Explorer entrypoint methods
     def on_trigger_explorer_error(self, *, error: str) -> None:
-        return None
+        send_thread_update(
+            install=self.install,
+            thread=self.thread,
+            data={},
+            ephemeral_user_id=self.slack_request.user_id,
+        )
 
     def on_trigger_explorer_success(self, *, run_id: int) -> None:
-        return None
+        # validate request installation
+        # react with thinking emoji
+        # send acknowledgement msg
+        #
+        pass
 
     def create_explorer_cache_payload(self) -> SlackExplorerCachePayload:
         return SlackExplorerCachePayload(
