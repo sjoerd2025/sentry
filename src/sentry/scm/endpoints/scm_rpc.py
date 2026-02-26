@@ -206,21 +206,35 @@ class ScmRpcServiceEndpoint(Endpoint):
         except SCMCodedError as e:
             sentry_sdk.capture_exception()
             return Response(
-                data={"errors": [{"type": "SCMCodedError", "details": e.args}]}, status=400
+                data={"errors": [{"type": "SCMCodedError", "details": self._make_details(e)}]},
+                status=400,
             )
         except SCMProviderException as e:
             sentry_sdk.capture_exception()
             return Response(
-                data={"errors": [{"type": "SCMProviderException", "details": e.args}]}, status=503
+                data={
+                    "errors": [{"type": "SCMProviderException", "details": self._make_details(e)}]
+                },
+                status=503,
             )
         except SCMError as e:
             sentry_sdk.capture_exception()
-            return Response(data={"errors": [{"type": "SCMError", "details": e.args}]}, status=500)
+            return Response(
+                data={"errors": [{"type": "SCMError", "details": self._make_details(e)}]},
+                status=500,
+            )
         except Exception:
             sentry_sdk.capture_exception()
             raise
         else:
             return Response(data={"data": result})
+
+    def _make_details(self, e: BaseException) -> list[Any]:
+        details = list(e.args)
+        while e.__cause__:
+            e = e.__cause__
+            details.extend(e.args)
+        return details
 
 
 scm_method_registry: dict[str, Callable] = {

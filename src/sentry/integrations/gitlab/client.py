@@ -255,6 +255,11 @@ class GitLabApiClient(IntegrationProxyClient, RepositoryClient, CommitContextCli
             data=data,
         )
 
+    def get_merge_request(self, project_id: str, pr_key: str) -> Any:
+        return self.get(
+            GitLabApiClientPath.merge_request.format(project_id=project_id, pr_key=pr_key)
+        )
+
     def create_pr_comment(self, repo: Repository, pr: PullRequest, data: dict[str, Any]) -> Any:
         project_id = repo.config["project_id"]
         url = GitLabApiClientPath.create_pr_note.format(project=project_id, pr_key=pr.key)

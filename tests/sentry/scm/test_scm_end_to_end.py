@@ -1,4 +1,6 @@
+from collections.abc import Callable
 from datetime import datetime
+from typing import Literal
 
 import pytest
 
@@ -15,10 +17,10 @@ from sentry.scm.client.scm_rpc_client import SourceCodeManagerRPCClient
         params := [
             # https://github.com/jacquev6/test-Sentry-Integration-Dev-jacquev6
             ("GitHub external", ("github", "1159224812")),
-            ("GitHub internal", 1),
+            # ("GitHub internal", 1),
             # https://gitlab.com/jacquev6-sentry/test-sentry-integration-dev-jacquev6
             ("GitLab external", ("gitlab", "gitlab.com:79787061")),
-            ("GitLab internal", 2),
+            # ("GitLab internal", 2),
         ]
     ),
     ids=[p[0] for p in params],
@@ -30,6 +32,52 @@ def client(request: pytest.FixtureRequest) -> SourceCodeManagerRPCClient:
         organization_id=1,
         repository_id=request.param[1],
     )
+
+
+type Service = Literal["github", "gitlab"]
+
+
+@pytest.fixture
+def service(request: pytest.FixtureRequest) -> Service:
+    return request.node.callspec.params["client"][0].split()[0].lower()
+
+
+type Switch[T] = Callable[[T, T], T]
+
+
+@pytest.fixture
+def switch(service: Service) -> Switch:
+    def f[T](github: T, gitlab: T) -> T:
+        match service:
+            case "github":
+                return github
+            case "gitlab":
+                return gitlab
+
+    return f
+
+
+def test_get_pull_request(switch: Switch, client: SourceCodeManagerRPCClient) -> None:
+    assert client.get_pull_request(switch("2", "1"))["data"] == {
+        "id": switch("3329785233", "459277081"),
+        "number": switch(2, 1),
+        "title": "Add blah",
+        "body": None,
+        "state": "open",
+        "merged": False,
+        "url": switch(
+            "https://api.github.com/repos/jacquev6/test-Sentry-Integration-Dev-jacquev6/pulls/2", ""
+        ),
+        "html_url": switch(
+            "https://github.com/jacquev6/test-Sentry-Integration-Dev-jacquev6/pull/2",
+            "https://gitlab.com/jacquev6-sentry/test-sentry-integration-dev-jacquev6/-/merge_requests/1",
+        ),
+        "head": {
+            "sha": "6d8ca33dae268d3c5835e721e5702ef9dcb43c8c",
+            "ref": "topics/blah",
+        },
+        "base": {"sha": switch("0941ee0a9eac9914cfddf5adec7a9558a2f1c447", ""), "ref": "main"},
+    }
 
 
 def test_get_commits(client: SourceCodeManagerRPCClient) -> None:

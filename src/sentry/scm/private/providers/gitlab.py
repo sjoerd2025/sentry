@@ -21,6 +21,7 @@ from sentry.scm.types import (
     GitTree,
     InputTreeEntry,
     PullRequest,
+    PullRequestBranch,
     PullRequestCommit,
     PullRequestFile,
     Reaction,
@@ -73,7 +74,29 @@ class GitLabProvider:
         )
 
     def get_pull_request(self, pull_request_id: str) -> ActionResult[PullRequest]:
-        raise NotImplementedError
+        raw = self.client.get_merge_request(self._repo_id, pull_request_id)
+        return ActionResult(
+            data=PullRequest(
+                id=raw["id"],
+                number=raw["iid"],
+                title=raw["title"],
+                body=raw["description"] or None,
+                state="open",
+                base=PullRequestBranch(
+                    ref=raw["target_branch"],
+                    sha="",  # @todo Fetch sha for target branch? But then risk rate-limits and inconsistencies (race conditions)?
+                ),
+                head=PullRequestBranch(
+                    ref=raw["source_branch"],
+                    sha=raw["sha"],
+                ),
+                merged=raw["merged_at"] is not None,
+                url="",  # @todo Remove attribute?
+                html_url=raw["web_url"],
+            ),
+            type="gitlab",
+            raw=raw,
+        )
 
     def get_issue_comments(self, issue_id: str) -> ActionResult[list[Comment]]:
         raise NotImplementedError

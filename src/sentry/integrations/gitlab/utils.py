@@ -38,6 +38,7 @@ class GitLabApiClientPath:
     issues = "/projects/{project}/issues"
     create_issue_note = "/projects/{project}/issues/{issue_id}/notes"
     update_issue_note = "/projects/{project}/issues/{issue_id}/notes/{note_id}"
+    merge_request = "/projects/{project_id}/merge_requests/{pr_key}"
     create_pr_note = "/projects/{project}/merge_requests/{pr_key}/notes"
     update_pr_note = "/projects/{project}/merge_requests/{pr_key}/notes/{note_id}"
     pr_diffs = "/projects/{project}/merge_requests/{pr_key}/diffs"
