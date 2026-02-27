@@ -51,10 +51,7 @@ class SlackEntrypointCachePayload(TypedDict):
 
 class SlackExplorerCachePayload(TypedDict):
     organization_id: int
-    project_id: int
-    group_id: int
     integration_id: int
-    group_link: str
     threads: list[SlackThreadDetails]
 
 
@@ -224,9 +221,6 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
             threads=[self.thread],
             organization_id=self.organization_id,
             integration_id=self.install.model.id,
-            project_id=self.group.project_id,
-            group_id=self.group.id,
-            group_link=self.get_group_link(self.group),
         )
 
     @staticmethod
