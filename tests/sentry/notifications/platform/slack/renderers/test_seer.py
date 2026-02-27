@@ -266,8 +266,14 @@ class SeerSlackRendererExplorerErrorTest(TestCase):
         renderable = SeerSlackRenderer._render_explorer_error(data)
 
         assert renderable["text"] == "Seer stumbled: Explorer failed"
-        assert renderable["blocks"][0].text.text == "Explorer failed"
-        assert ">Timeout." in renderable["blocks"][1].text.text
+        title_block = renderable["blocks"][0]
+        assert isinstance(title_block, SectionBlock)
+        assert title_block.text is not None
+        assert title_block.text.text == "Explorer failed"
+        body_block = renderable["blocks"][1]
+        assert isinstance(body_block, SectionBlock)
+        assert body_block.text is not None
+        assert ">Timeout." in body_block.text.text
 
     def test_render_dispatches_to_explorer_error(self) -> None:
         from sentry.notifications.platform.types import NotificationRenderedTemplate

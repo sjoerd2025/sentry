@@ -10,6 +10,7 @@ from sentry.models.organization import Organization
 from sentry.notifications.platform.templates.seer import (
     SeerAutofixError,
     SeerAutofixUpdate,
+    SeerExplorerError,
 )
 from sentry.notifications.utils.actions import BlockKitMessageAction
 from sentry.seer.autofix.utils import AutofixStoppingPoint
@@ -141,9 +142,8 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
         has_seer_slack_feature_flag = features.has(
             "organizations:seer-slack-workflows", organization
         )
-        return has_seer_slack_feature_flag and has_seer_explorer_access_with_detail(
-            organization, None
-        )
+        has_explorer_access, _ = has_seer_explorer_access_with_detail(organization, None)
+        return has_seer_slack_feature_flag and has_explorer_access
 
     @classmethod
     def from_explorer_mention(
@@ -159,7 +159,7 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
         """Construct a SlackEntrypoint from an app_mention event for Explorer."""
         from sentry.integrations.services.integration import integration_service
         from sentry.integrations.slack.integration import SlackIntegration
-        from sentry.integrations.slack.spec import IntegrationProviderSlug
+        from sentry.integrations.types import IntegrationProviderSlug
 
         integration = integration_service.get_integration(
             integration_id=integration_id,
@@ -208,7 +208,7 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
         send_thread_update(
             install=self.install,
             thread=self.thread,
-            data={},
+            data=SeerExplorerError(error_message=error),
             ephemeral_user_id=self.slack_user_id,
         )
 
