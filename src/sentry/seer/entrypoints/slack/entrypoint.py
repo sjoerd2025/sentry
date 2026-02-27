@@ -212,11 +212,11 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
         )
 
     def on_trigger_explorer_success(self, *, run_id: int) -> None:
-        # validate request installation
-        # react with thinking emoji
-        # send acknowledgement msg
-        #
-        pass
+        self.install.add_reaction(
+            channel_id=self.channel_id,
+            message_ts=self.message_ts,
+            emoji="thinking_face",
+        )
 
     def create_explorer_cache_payload(self) -> SlackExplorerCachePayload:
         return SlackExplorerCachePayload(
