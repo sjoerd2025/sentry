@@ -1,8 +1,6 @@
-import {Component, Fragment} from 'react';
+import {Fragment, useState} from 'react';
 import {css} from '@emotion/react';
 import styled from '@emotion/styled';
-import cloneDeep from 'lodash/cloneDeep';
-import set from 'lodash/set';
 
 import {Button} from '@sentry/scraps/button';
 import {Input} from '@sentry/scraps/input';
@@ -22,6 +20,7 @@ import {defined} from 'sentry/utils';
 import type EventView from 'sentry/utils/discover/eventView';
 import withApi from 'sentry/utils/withApi';
 import withProjects from 'sentry/utils/withProjects';
+import {useEventViewProject} from 'sentry/views/performance/transactionSummary/projectUtils';
 
 import {transactionSummaryRouteWithQuery} from './utils';
 
@@ -47,35 +46,31 @@ type Props = {
   project?: string;
 } & ModalRenderProps;
 
-type State = {
-  error: string | null;
-  metric: TransactionThresholdMetric | undefined;
-  threshold: number | undefined;
-};
+function TransactionThresholdModal({
+  api,
+  Body,
+  eventView,
+  Footer,
+  Header,
+  organization,
+  closeModal,
+  onApply,
+  projects,
+  transactionName,
+  transactionThreshold,
+  transactionThresholdMetric,
+}: Props) {
+  const [threshold, setThreshold] = useState<number | string | undefined>(
+    transactionThreshold
+  );
+  const [metric, setMetric] = useState<TransactionThresholdMetric | undefined>(
+    transactionThresholdMetric
+  );
+  const project = useEventViewProject(eventView, projects);
 
-class TransactionThresholdModal extends Component<Props, State> {
-  state: State = {
-    threshold: this.props.transactionThreshold,
-    metric: this.props.transactionThresholdMetric,
-    error: null,
-  };
-
-  getProject() {
-    const {projects, eventView, project} = this.props;
-
-    if (defined(project)) {
-      return projects.find(proj => proj.id === project);
-    }
-    const projectId = String(eventView.project[0]);
-    return projects.find(proj => proj.id === projectId);
-  }
-
-  handleApply = (event: React.FormEvent) => {
+  const handleApply = (event: React.FormEvent) => {
     event.preventDefault();
 
-    const {api, closeModal, organization, transactionName, onApply} = this.props;
-
-    const project = this.getProject();
     if (!defined(project)) {
       return;
     }
@@ -91,20 +86,17 @@ class TransactionThresholdModal extends Component<Props, State> {
         },
         data: {
           transaction: transactionName,
-          threshold: this.state.threshold,
-          metric: this.state.metric,
+          threshold,
+          metric,
         },
       })
       .then(() => {
         closeModal();
         if (onApply) {
-          onApply(this.state.threshold, this.state.metric);
+          onApply(threshold, metric);
         }
       })
       .catch(err => {
-        this.setState({
-          error: err,
-        });
         let errorMessage =
           err.responseJSON?.threshold ?? err.responseJSON?.non_field_errors ?? null;
         if (Array.isArray(errorMessage)) {
@@ -114,21 +106,9 @@ class TransactionThresholdModal extends Component<Props, State> {
       });
   };
 
-  handleFieldChange = (field: string) => (value: string) => {
-    this.setState(prevState => {
-      const newState = cloneDeep(prevState);
-      set(newState, field, value);
-
-      return {...newState, errors: undefined};
-    });
-  };
-
-  handleReset = (event: React.FormEvent) => {
+  const handleReset = (event: React.FormEvent) => {
     event.preventDefault();
 
-    const {api, closeModal, organization, transactionName, onApply} = this.props;
-
-    const project = this.getProject();
     if (!defined(project)) {
       return;
     }
@@ -148,7 +128,7 @@ class TransactionThresholdModal extends Component<Props, State> {
       })
       .then(() => {
         const projectThresholdUrl = `/projects/${organization.slug}/${project.slug}/transaction-threshold/configure/`;
-        this.props.api
+        api
           .requestPromise(projectThresholdUrl, {
             method: 'GET',
             includeAllArgs: true,
@@ -157,28 +137,21 @@ class TransactionThresholdModal extends Component<Props, State> {
             },
           })
           .then(([data]) => {
-            this.setState({
-              threshold: data.threshold,
-              metric: data.metric,
-            });
+            setThreshold(data.threshold);
+            setMetric(data.metric);
             closeModal();
             if (onApply) {
-              onApply(this.state.threshold, this.state.metric);
+              onApply(data.threshold, data.metric);
             }
           })
           .catch(err => {
             const errorMessage = err.responseJSON?.threshold ?? null;
             addErrorMessage(errorMessage);
           });
-      })
-      .catch(err => {
-        this.setState({
-          error: err,
-        });
       });
   };
 
-  renderModalFields() {
+  function renderModalFields() {
     return (
       <Fragment>
         <FieldGroup
@@ -198,9 +171,9 @@ class TransactionThresholdModal extends Component<Props, State> {
             options={METRIC_CHOICES.slice()}
             name="responseMetric"
             label={t('Calculation Method')}
-            value={this.state.metric}
-            onChange={(option: {label: string; value: string}) => {
-              this.handleFieldChange('metric')(option.value);
+            value={metric}
+            onChange={(option: {value: TransactionThresholdMetric}) => {
+              setMetric(option.value);
             }}
           />
         </FieldGroup>
@@ -221,9 +194,9 @@ class TransactionThresholdModal extends Component<Props, State> {
             name="threshold"
             pattern="[0-9]*(\.[0-9]*)?"
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-              this.handleFieldChange('threshold')(event.target.value);
+              setThreshold(event.target.value);
             }}
-            value={this.state.threshold}
+            value={threshold}
             step={100}
             min={100}
           />
@@ -232,21 +205,17 @@ class TransactionThresholdModal extends Component<Props, State> {
     );
   }
 
-  render() {
-    const {Header, Body, Footer, organization, transactionName, eventView} = this.props;
+  const summaryView = eventView.clone();
+  summaryView.query = summaryView.getQueryWithAdditionalConditions();
+  const target = transactionSummaryRouteWithQuery({
+    organization,
+    transaction: transactionName,
+    query: summaryView.generateQueryStringObject(),
+    projectID: project?.id,
+  });
 
-    const project = this.getProject();
-
-    const summaryView = eventView.clone();
-    summaryView.query = summaryView.getQueryWithAdditionalConditions();
-    const target = transactionSummaryRouteWithQuery({
-      organization,
-      transaction: transactionName,
-      query: summaryView.generateQueryStringObject(),
-      projectID: project?.id,
-    });
-
-    return (
+  return (
+    <div style={{border: '3px solid red'}}>
       <Fragment>
         <Header closeButton>
           <h4>{t('Transaction Settings')}</h4>
@@ -265,21 +234,17 @@ class TransactionThresholdModal extends Component<Props, State> {
               }
             )}
           </Instruction>
-          {this.renderModalFields()}
+          {renderModalFields()}
         </Body>
         <Footer>
           <Grid flow="column" align="center" gap="md">
-            <Button
-              priority="default"
-              onClick={this.handleReset}
-              data-test-id="reset-all"
-            >
+            <Button priority="default" onClick={handleReset} data-test-id="reset-all">
               {t('Reset All')}
             </Button>
             <Button
               aria-label={t('Apply')}
               priority="primary"
-              onClick={this.handleApply}
+              onClick={handleApply}
               data-test-id="apply-threshold"
             >
               {t('Apply')}
@@ -287,8 +252,8 @@ class TransactionThresholdModal extends Component<Props, State> {
           </Grid>
         </Footer>
       </Fragment>
-    );
-  }
+    </div>
+  );
 }
 
 const Instruction = styled('div')`

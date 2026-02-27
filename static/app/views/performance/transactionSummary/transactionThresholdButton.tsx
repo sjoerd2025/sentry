@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useState} from 'react';
 
 import {Button} from '@sentry/scraps/button';
 
@@ -13,6 +13,7 @@ import {defined} from 'sentry/utils';
 import type EventView from 'sentry/utils/discover/eventView';
 import withApi from 'sentry/utils/withApi';
 import withProjects from 'sentry/utils/withProjects';
+import {useEventViewProject} from 'sentry/views/performance/transactionSummary/projectUtils';
 
 import type {TransactionThresholdMetric} from './transactionThresholdModal';
 import TransactionThresholdModal, {modalCss} from './transactionThresholdModal';
@@ -39,14 +40,7 @@ function TransactionThresholdButton({
   const [transactionThresholdMetric, setTransactionThresholdMetric] =
     useState<TransactionThresholdMetric>();
 
-  const project = useMemo(() => {
-    if (!defined(eventView)) {
-      return undefined;
-    }
-
-    const projectId = String(eventView.project[0]);
-    return projects.find(proj => proj.id === projectId);
-  }, [eventView, projects]);
+  const project = useEventViewProject(eventView, projects);
 
   useEffect(() => {
     if (!defined(project)) {
