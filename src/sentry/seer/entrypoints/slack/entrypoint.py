@@ -85,6 +85,7 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
         self.autofix_stopping_point = self.get_autofix_stopping_point_from_action(
             action=action, group_id=group.id
         )
+        self.slack_user_id = slack_request.user_id
         self.autofix_run_id = self.slack_request.callback_data.get("run_id")
 
     @staticmethod
@@ -143,6 +144,40 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
             organization, None
         )
 
+    @classmethod
+    def from_explorer_mention(
+        cls,
+        *,
+        integration_id: int,
+        organization_id: int,
+        channel_id: str,
+        message_ts: str,
+        thread_ts: str | None,
+        slack_user_id: str,
+    ) -> SlackEntrypoint:
+        """Construct a SlackEntrypoint from an app_mention event for Explorer."""
+        from sentry.integrations.services.integration import integration_service
+        from sentry.integrations.slack.integration import SlackIntegration
+        from sentry.integrations.slack.spec import IntegrationProviderSlug
+
+        integration = integration_service.get_integration(
+            integration_id=integration_id,
+            organization_id=organization_id,
+            provider=IntegrationProviderSlug.SLACK.value,
+        )
+        if not integration:
+            raise ValueError(f"Slack integration {integration_id} not found")
+
+        instance = cls.__new__(cls)
+        instance.channel_id = channel_id
+        instance.message_ts = message_ts
+        instance.thread_ts = thread_ts or message_ts
+        instance.thread = SlackThreadDetails(thread_ts=instance.thread_ts, channel_id=channel_id)
+        instance.organization_id = organization_id
+        instance.install = SlackIntegration(model=integration, organization_id=organization_id)
+        instance.slack_user_id = slack_user_id
+        return instance
+
     def _update_existing_message(
         self, *, run_id: int, has_complete_stage: bool, include_user: bool
     ) -> None:
@@ -173,7 +208,7 @@ class SlackEntrypoint(SeerEntrypoint[SlackEntrypointCachePayload, SlackExplorerC
             install=self.install,
             thread=self.thread,
             data={},
-            ephemeral_user_id=self.slack_request.user_id,
+            ephemeral_user_id=self.slack_user_id,
         )
 
     def on_trigger_explorer_success(self, *, run_id: int) -> None:
