@@ -49,13 +49,16 @@ export function SnapshotDevTools({
   const [recompareError, setRecompareError] = useState<string | null>(null);
   const clientRef = useRef(new Client());
 
+  const isComparisonInProgress =
+    comparisonState === 'PENDING' || comparisonState === 'PROCESSING';
+
   useEffect(() => {
-    if (comparisonState) {
+    if (isComparisonInProgress) {
       setPolling(true);
     } else {
       setPolling(false);
     }
-  }, [comparisonState]);
+  }, [isComparisonInProgress]);
 
   useEffect(() => {
     if (!polling) {

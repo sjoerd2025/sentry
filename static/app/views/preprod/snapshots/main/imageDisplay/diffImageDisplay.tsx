@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import styled from '@emotion/styled';
 
 import {Image} from '@sentry/scraps/image';
@@ -24,6 +24,7 @@ export function DiffImageDisplay({
   overlayColor,
 }: DiffImageDisplayProps) {
   const [diffMaskUrl, setDiffMaskUrl] = useState<string | null>(null);
+  const currentDiffMaskUrlRef = useRef<string | null>(null);
 
   const baseImageUrl = `${imageBaseUrl}${pair.base_image.key}/`;
   const headImageUrl = `${imageBaseUrl}${pair.head_image.key}/`;
@@ -32,6 +33,12 @@ export function DiffImageDisplay({
     : null;
 
   useEffect(() => {
+    if (currentDiffMaskUrlRef.current) {
+      URL.revokeObjectURL(currentDiffMaskUrlRef.current);
+      currentDiffMaskUrlRef.current = null;
+    }
+    setDiffMaskUrl(null);
+
     if (!diffImageUrl) {
       return undefined;
     }
@@ -40,17 +47,19 @@ export function DiffImageDisplay({
       .then(r => r.blob())
       .then(blob => {
         if (!cancelled) {
-          setDiffMaskUrl(URL.createObjectURL(blob));
+          const nextDiffMaskUrl = URL.createObjectURL(blob);
+          currentDiffMaskUrlRef.current = nextDiffMaskUrl;
+          setDiffMaskUrl(nextDiffMaskUrl);
         }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
-      if (diffMaskUrl) {
-        URL.revokeObjectURL(diffMaskUrl);
+      if (currentDiffMaskUrlRef.current) {
+        URL.revokeObjectURL(currentDiffMaskUrlRef.current);
+        currentDiffMaskUrlRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diffImageUrl]);
 
   const diffPercent = pair.diff === null ? null : `${(pair.diff * 100).toFixed(1)}%`;
