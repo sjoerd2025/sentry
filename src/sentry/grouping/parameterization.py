@@ -35,6 +35,36 @@ class ParameterizationRegex:
         return rf"{prefix}(?P<{self.name}>{raw_pattern}){postfix}"
 
 
+# NOTE: The order in which patterns appear here is important, for a few reasons:
+#
+# - In cases where a single instance of pattern A could be interpreted as multiple instances of
+#   pattern B, pattern A must come before pattern type B, so that the pattern A instance will be
+#   matched as a single entity before pattern B is ever checked.
+#
+#   For example, both the float `11.21` and the date `11/21` consist of two integers, separated by
+#   punctuation. If the integer pattern came before the float and date patterns, the two values
+#   would get parameterized as `<int>.<int>` and `<int>/<int>`, respectively. To ensure that doesn't
+#   happen, we make sure to put the integer pattern after the two others.
+#
+#   Other examples where this matters: ipv6 addresses consist of hex strings separated by colons, so
+#   the ip pattern comes before the hex pattern. The same applies to traceparent ids, uuids, etc.
+#
+# - Hex values that happen to contain only digits are also int values, and vice-versa. The same is
+#   true for both full (40-character) and abbreviated (7-character) git shas, as well as md5 hashes
+#   (which are always 32 characters). We've ordered the regexes here so that we classify such
+#   strings as follows, according to length:
+#
+#       1-6 characters    -> int  (these are too short for our hex matching)
+#       7 characters      -> int  (could be a short sha, but we see way more ints than shas)
+#       8-31 charceters   -> hex  (long hex strings are more common than very big ints)
+#       32 charceters     -> md5  (very specific length, so likely not just generic hex)
+#       31-39 characters  -> hex  (these would be ridiculously large if they were ints - at
+#                                  minimum a trillion times the number of grains of sand on earth)
+#       40 characters     -> sha  (very specific length, so likely not just generic hex)
+#       41-128 characters -> hex  (all of the same arguments as above)
+#       129+ characters   -> n/a  (we limit our regex for performance reasons)
+#
+# When adding a new pattern, make sure to put it in the right place!
 DEFAULT_PARAMETERIZATION_REGEXES = [
     ParameterizationRegex(
         name="email",
