@@ -216,6 +216,8 @@ class ScmRpcServiceEndpoint(Endpoint):
         except SCMError as e:
             sentry_sdk.capture_exception()
             return Response(data={"errors": [{"type": "SCMError", "details": e.args}]}, status=500)
+        except (NotFound, ValidationError):
+            raise
         except Exception:
             sentry_sdk.capture_exception()
             raise
