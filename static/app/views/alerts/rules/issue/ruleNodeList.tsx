@@ -12,7 +12,6 @@ import type {
   IssueAlertRuleAction,
   IssueAlertRuleActionTemplate,
   IssueAlertRuleCondition,
-  IssueAlertRuleConditionTemplate,
 } from 'sentry/types/alerts';
 import {IssueAlertActionType, IssueAlertConditionType} from 'sentry/types/alerts';
 import type {Organization} from 'sentry/types/organization';
@@ -38,9 +37,7 @@ type Props = {
    * All available actions or conditions
    */
   nodes: IssueAlertConfiguration[keyof IssueAlertConfiguration] | null;
-  onAddRow: (
-    value: IssueAlertRuleActionTemplate | IssueAlertRuleConditionTemplate
-  ) => void;
+  onAddRow: (value: IssueAlertRuleActionTemplate) => void;
   onDeleteRow: (ruleIndex: number) => void;
   onPropertyChange: (ruleIndex: number, prop: string, val: string) => void;
   onResetRow: (ruleIndex: number, name: string, value: string) => void;
@@ -106,10 +103,7 @@ const groupLabels = {
  */
 const groupSelectOptions = (actions: IssueAlertRuleActionTemplate[]) => {
   const grouped = actions.reduce<
-    Record<
-      keyof typeof groupLabels,
-      IssueAlertRuleActionTemplate[] | IssueAlertRuleConditionTemplate[]
-    >
+    Record<keyof typeof groupLabels, IssueAlertRuleActionTemplate[]>
   >(
     (acc, curr) => {
       if (curr.actionType === 'ticket') {

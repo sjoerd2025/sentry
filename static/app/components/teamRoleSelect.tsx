@@ -5,7 +5,7 @@ import type {ControlProps} from '@sentry/scraps/select';
 
 import RoleSelectControl from 'sentry/components/roleSelectControl';
 import {space} from 'sentry/styles/space';
-import type {Organization, Team, TeamMember, TeamRole} from 'sentry/types/organization';
+import type {Organization, Team, TeamMember} from 'sentry/types/organization';
 import {
   hasOrgRoleOverwrite,
   RoleOverwriteIcon,
@@ -13,7 +13,7 @@ import {
 
 interface Props {
   member: TeamMember;
-  onChangeTeamRole: (newRole: TeamRole['id'] | string) => void;
+  onChangeTeamRole: (newRole: string) => void;
   organization: Organization;
   team: Team;
   disabled?: boolean;
