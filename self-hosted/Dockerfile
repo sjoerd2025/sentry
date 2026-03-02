@@ -1,3 +1,18 @@
+FROM scratch AS odiff-amd64
+ADD --chmod=755 \
+    --checksum=sha256:2c17e6bcf92a58e6668f19f17f4a27fa4b1d70840994f31bd837b55bb6b297d7 \
+    https://github.com/dmtrKovalenko/odiff/releases/download/v4.3.2/odiff-linux-x64 \
+    /odiff
+
+FROM scratch AS odiff-arm64
+ADD --chmod=755 \
+    --checksum=sha256:d65f748c463a6aa78fa7bcdd31acd797eaed5160867e7769a3b291cfea42c9a0 \
+    https://github.com/dmtrKovalenko/odiff/releases/download/v4.3.2/odiff-linux-arm64 \
+    /odiff
+
+ARG TARGETARCH
+FROM odiff-${TARGETARCH} AS odiff
+
 FROM python:3.13.1-slim-bookworm
 
 LABEL maintainer="oss@sentry.io"
@@ -20,13 +35,15 @@ RUN : \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=odiff /odiff /usr/local/bin/odiff
+
 WORKDIR /usr/src/sentry
 
 ENV PATH="/.venv/bin:$PATH" UV_PROJECT_ENVIRONMENT=/.venv \
     PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
     UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
 
-RUN python3 -m pip install --index-url 'https://pypi.devinfra.sentry.io/simple' 'uv==0.8.2'
+RUN python3 -m pip install --index-url 'https://pypi.devinfra.sentry.io/simple' 'uv==0.9.28'
 
 # We don't want uv-managed python, we want to use python from the image.
 # We only want to use uv to manage dependencies.
@@ -45,7 +62,6 @@ RUN set -x \
   && buildDeps=" \
   gcc \
   libpcre2-dev \
-  wget \
   zlib1g-dev \
   " \
   && apt-get update \
