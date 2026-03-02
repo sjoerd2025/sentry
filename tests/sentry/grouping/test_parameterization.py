@@ -200,6 +200,39 @@ def test_experimental_parameterization(
 # parameterization. (Remember to remove the last item in each tuple for the cases you fix.)
 incorrect_cases = [
     # ("name", "input", "desired", "actual")
+    ("date - datetime space-separated UTC", "2006-01-02 15:04:05Z", "<date>", "<date>Z"),
+    (
+        "date - datetime space-separated w offset",
+        "2006-01-02 15:04:05+01:00",
+        "<date>",
+        "<date>+<int>:<int>",
+    ),
+    ("date - datetime compressed space-separated", "20060102 150405", "<date>", "<hex> <int>"),
+    (
+        "date - datetime compressed space-separated UTC",
+        "20060102 150405Z",
+        "<date>",
+        "<hex> 150405Z",
+    ),
+    (
+        "date - datetime compressed space-separated w offset",
+        "20060102 150405+0100",
+        "<date>",
+        "<hex> <int>+<int>",
+    ),
+    ("date - datetime compressed T-separated", "20060102T150405", "<date>", "20060102T150405"),
+    (
+        "date - datetime compressed T-separated UTC",
+        "20060102T150405Z",
+        "<date>",
+        "20060102T150405Z",
+    ),
+    (
+        "date - datetime compressed T-separated w offset",
+        "20060102T150405+0100",
+        "<date>",
+        "20060102T150405+<int>",
+    ),
     (
         "hex without prefix - lowercase, no numbers until later",
         "deadbeef 123",
