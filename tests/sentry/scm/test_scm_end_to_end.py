@@ -65,9 +65,6 @@ def test_get_pull_request(switch: Switch, client: SourceCodeManagerRPCClient) ->
         "body": None,
         "state": "open",
         "merged": False,
-        "url": switch(
-            "https://api.github.com/repos/jacquev6/test-Sentry-Integration-Dev-jacquev6/pulls/2", ""
-        ),
         "html_url": switch(
             "https://github.com/jacquev6/test-Sentry-Integration-Dev-jacquev6/pull/2",
             "https://gitlab.com/jacquev6-sentry/test-sentry-integration-dev-jacquev6/-/merge_requests/1",
@@ -76,11 +73,11 @@ def test_get_pull_request(switch: Switch, client: SourceCodeManagerRPCClient) ->
             "sha": "6d8ca33dae268d3c5835e721e5702ef9dcb43c8c",
             "ref": "topics/blah",
         },
-        "base": {"sha": switch("0941ee0a9eac9914cfddf5adec7a9558a2f1c447", ""), "ref": "main"},
+        "base": {"sha": switch("0941ee0a9eac9914cfddf5adec7a9558a2f1c447", None), "ref": "main"},
     }
 
 
-def test_get_commits(client: SourceCodeManagerRPCClient) -> None:
+def test_get_commits(switch: Switch, client: SourceCodeManagerRPCClient) -> None:
     assert client.get_commits(sha="1403774c82d64068af027d0b5d0cc4f52473b6f2")["data"] == [
         {
             "id": "1403774c82d64068af027d0b5d0cc4f52473b6f2",
@@ -90,6 +87,6 @@ def test_get_commits(client: SourceCodeManagerRPCClient) -> None:
                 "email": "vincent@vincent-jacques.net",
                 "date": datetime.fromisoformat("2026-02-16T14:24:18+01:00"),
             },
-            "files": [],
+            "files": switch([], None),
         }
     ]

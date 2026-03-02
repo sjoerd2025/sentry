@@ -753,7 +753,6 @@ def map_pull_request(raw: dict[str, Any]) -> PullRequest:
         body=raw.get("body"),
         state=raw["state"],
         merged=raw.get("merged", False),
-        url=raw.get("url", ""),
         html_url=raw.get("html_url", ""),
         head=PullRequestBranch(sha=raw["head"]["sha"], ref=raw["head"]["ref"]),
         base=PullRequestBranch(sha=raw["base"]["sha"], ref=raw["base"]["ref"]),

@@ -125,7 +125,7 @@ class ReactionResult(TypedDict):
 class PullRequestBranch(TypedDict):
     """A branch reference within a pull request (head or base)."""
 
-    sha: str
+    sha: str | None
     ref: str
 
 
@@ -138,7 +138,6 @@ class PullRequest(TypedDict):
     body: str | None
     state: Literal["open", "closed"]
     merged: bool
-    url: str
     html_url: str
     head: PullRequestBranch
     base: PullRequestBranch
@@ -202,7 +201,7 @@ class Commit(TypedDict):
     id: str
     message: str
     author: CommitAuthor | None
-    files: list[CommitFile]
+    files: list[CommitFile] | None
 
 
 class CommitComparison(TypedDict):

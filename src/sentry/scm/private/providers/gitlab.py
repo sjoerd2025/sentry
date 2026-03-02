@@ -82,16 +82,12 @@ class GitLabProvider:
                 title=raw["title"],
                 body=raw["description"] or None,
                 state="open",
-                base=PullRequestBranch(
-                    ref=raw["target_branch"],
-                    sha="",  # @todo Fetch sha for target branch? But then risk rate-limits and inconsistencies (race conditions)?
-                ),
+                base=PullRequestBranch(ref=raw["target_branch"], sha=None),
                 head=PullRequestBranch(
                     ref=raw["source_branch"],
                     sha=raw["sha"],
                 ),
                 merged=raw["merged_at"] is not None,
-                url="",  # @todo Remove attribute?
                 html_url=raw["web_url"],
             ),
             type="gitlab",
@@ -316,5 +312,5 @@ def map_commit(raw: dict[str, Any]) -> Commit:
             email=raw["author_email"],
             date=datetime.datetime.fromisoformat(raw["created_at"]),
         ),
-        files=[],  # @todo
+        files=None,
     )

@@ -34,7 +34,7 @@ class ReactionResult(pydantic.BaseModel):
 
 
 class PullRequestBranch(pydantic.BaseModel):
-    sha: str
+    sha: str | None
     ref: str
 
 
@@ -45,7 +45,6 @@ class PullRequest(pydantic.BaseModel):
     body: str | None
     state: Literal["open", "closed"]
     merged: bool
-    url: str
     html_url: str
     head: PullRequestBranch
     base: PullRequestBranch
@@ -62,6 +61,7 @@ class Repository(pydantic.BaseModel):
     name: str
     organization_id: int
     status: int
+    external_id: str | None
 
 
 class GitRef(pydantic.BaseModel):
@@ -97,7 +97,7 @@ class Commit(pydantic.BaseModel):
     id: str
     message: str
     author: CommitAuthor | None
-    files: list[CommitFile]
+    files: list[CommitFile] | None
 
 
 class CommitComparison(pydantic.BaseModel):
