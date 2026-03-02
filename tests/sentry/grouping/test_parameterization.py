@@ -24,6 +24,8 @@ standard_cases = [
     ("hostname - tld", "example.com", "<hostname>"),
     ("hostname - subdomain", "www.example.net", "<hostname>"),
     ("ip", "0.0.0.0", "<ip>"),
+    ("ip - double colon object property", "Option::unwrap()", "Option::unwrap()"),
+    ("ip - double colon object property including hex", "Bee::buzz()", "Bee::buzz()"),
     (
         "traceparent - header",
         "traceparent: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
@@ -213,18 +215,6 @@ incorrect_cases = [
     ("git sha", "commit a93c7d2", "commit <git_sha>", "commit a93c7d2"),
     ("int - number in word", "Encoding: utf-8", "Encoding: utf-8", "Encoding: utf<int>"),
     ("int - with commas", "4,150,908", "<int>", "<int>,<int>,<int>"),
-    (
-        "ip - double colon object property",
-        "Option::unwrap()",
-        "Option::unwrap()",
-        "Option<ip>unwrap()",
-    ),
-    (
-        "ip - double colon object property including hex",
-        "Bee::buzz()",
-        "Bee::buzz()",
-        "<ip>buzz()",
-    ),
     (
         "json - double quotes",
         '{"dogs are great": true, "dog_id": "greatdog1231"}',
