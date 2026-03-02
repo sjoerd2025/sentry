@@ -46,30 +46,12 @@ class OrganizationRepositoryPlatformsGetTest(APITestCase):
             json={"Python": 50000, "JavaScript": 30000},
             status=200,
         )
-        # Mock 404s for manifest file lookups (no framework detection)
+        # Root directory listing (no manifest files → no framework detection)
         responses.add(
             method=responses.GET,
-            url="https://api.github.com/repos/Test-Organization/foo/contents/requirements.txt",
-            json={"message": "Not Found"},
-            status=404,
-        )
-        responses.add(
-            method=responses.GET,
-            url="https://api.github.com/repos/Test-Organization/foo/contents/pyproject.toml",
-            json={"message": "Not Found"},
-            status=404,
-        )
-        responses.add(
-            method=responses.GET,
-            url="https://api.github.com/repos/Test-Organization/foo/contents/Pipfile",
-            json={"message": "Not Found"},
-            status=404,
-        )
-        responses.add(
-            method=responses.GET,
-            url="https://api.github.com/repos/Test-Organization/foo/contents/package.json",
-            json={"message": "Not Found"},
-            status=404,
+            url="https://api.github.com/repos/Test-Organization/foo/contents",
+            json=[],
+            status=200,
         )
 
         response = self.get_success_response(self.organization.slug, self.repo.id, status_code=200)
@@ -86,6 +68,13 @@ class OrganizationRepositoryPlatformsGetTest(APITestCase):
             method=responses.GET,
             url="https://api.github.com/repos/Test-Organization/foo/languages",
             json={"Python": 50000},
+            status=200,
+        )
+        # Root directory listing with requirements.txt so framework detection can find it
+        responses.add(
+            method=responses.GET,
+            url="https://api.github.com/repos/Test-Organization/foo/contents",
+            json=[{"name": "requirements.txt", "type": "file"}],
             status=200,
         )
 
