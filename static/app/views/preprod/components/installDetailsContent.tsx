@@ -20,12 +20,10 @@ import type {InstallDetailsApiResponse} from 'sentry/views/preprod/types/install
 
 interface InstallDetailsContentProps {
   artifactId: string;
-  projectId: string;
   size?: 'sm' | 'lg';
 }
 
 export function InstallDetailsContent({
-  projectId,
   artifactId,
   size = 'sm',
 }: InstallDetailsContentProps) {
@@ -44,12 +42,11 @@ export function InstallDetailsContent({
   } = useApiQuery<InstallDetailsApiResponse>(
     [
       getApiUrl(
-        '/projects/$organizationIdOrSlug/$projectIdOrSlug/preprodartifacts/$headArtifactId/install-details/',
+        '/organizations/$organizationIdOrSlug/preprodartifacts/$artifactId/install-details/',
         {
           path: {
             organizationIdOrSlug: organization.slug,
-            projectIdOrSlug: projectId,
-            headArtifactId: artifactId,
+            artifactId,
           },
         }
       ),

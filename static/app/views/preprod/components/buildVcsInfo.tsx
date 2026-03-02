@@ -90,7 +90,6 @@ export function BuildVcsInfo({buildDetailsData, projectId}: BuildVcsInfoProps) {
                         {
                           baseArtifactId: buildDetailsData.base_artifact_id,
                           organizationSlug: organization.slug,
-                          projectId,
                         },
                         'size'
                       )

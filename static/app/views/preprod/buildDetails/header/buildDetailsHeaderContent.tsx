@@ -141,7 +141,6 @@ export function BuildDetailsHeaderContent(props: BuildDetailsHeaderContentProps)
     router.push(
       getCompareBuildPath({
         organizationSlug: organization.slug,
-        projectId,
         headArtifactId: buildDetailsData.id,
       })
     );

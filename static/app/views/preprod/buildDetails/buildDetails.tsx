@@ -54,11 +54,10 @@ export default function BuildDetails() {
     useApiQuery<BuildDetailsApiResponse>(
       [
         getApiUrl(
-          '/projects/$organizationIdOrSlug/$projectIdOrSlug/preprodartifacts/$headArtifactId/build-details/',
+          '/organizations/$organizationIdOrSlug/preprodartifacts/$headArtifactId/build-details/',
           {
             path: {
               organizationIdOrSlug: organization.slug,
-              projectIdOrSlug: projectId,
               headArtifactId: artifactId,
             },
           }
@@ -82,11 +81,10 @@ export default function BuildDetails() {
     useApiQuery<AppSizeApiResponse>(
       [
         getApiUrl(
-          '/projects/$organizationIdOrSlug/$projectIdOrSlug/files/preprodartifacts/$headArtifactId/size-analysis/',
+          '/organizations/$organizationIdOrSlug/files/preprodartifacts/$headArtifactId/size-analysis/',
           {
             path: {
               organizationIdOrSlug: organization.slug,
-              projectIdOrSlug: projectId,
               headArtifactId: artifactId,
             },
           }
@@ -124,7 +122,7 @@ export default function BuildDetails() {
   >({
     mutationFn: () => {
       return fetchMutation({
-        url: `/projects/${organization.slug}/${projectId}/preprod-artifact/rerun-analysis/${artifactId}/`,
+        url: `/organizations/${organization.slug}/preprod-artifact/rerun-analysis/${artifactId}/`,
         method: 'POST',
       });
     },

@@ -36,11 +36,11 @@ import {makeReleasesUrl} from 'sentry/views/preprod/utils/releasesUrl';
 
 interface BuildCompareHeaderContentProps {
   buildDetails: BuildDetailsApiResponse;
-  projectId: string;
   baseArtifactId?: string;
   headArtifactId?: string;
   isRerunning?: boolean;
   onRerunComparison?: () => void;
+  projectId?: string;
 }
 
 export function BuildCompareHeaderContent(props: BuildCompareHeaderContentProps) {
