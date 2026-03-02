@@ -127,6 +127,8 @@ standard_cases = [
     ("hex without prefix - uppercase, 128 digits", "B0" * 64, "<hex>"),
     ("hex without prefix - lowercase, no numbers", "deadbeef", "deadbeef"),
     ("hex without prefix - uppercase, no numbers", "DEADBEEF", "DEADBEEF"),
+    ("hex without prefix - lowercase, no numbers until later", "deadbeef 123", "deadbeef <int>"),
+    ("hex without prefix - uppercase, no numbers until later", "DEADBEEF 123", "DEADBEEF <int>"),
     ("hex without prefix - no letters, < 8 digits", "1234567", "<int>"),
     ("hex without prefix - no letters, 8+ digits", "12345678", "<hex>"),
     ("git sha - all letters", "commit deadbeef", "commit deadbeef"),
@@ -209,18 +211,6 @@ def test_experimental_parameterization(
 incorrect_cases = [
     # ("name", "input", "desired", "actual")
     ("git sha", "commit a93c7d2", "commit <git_sha>", "commit a93c7d2"),
-    (
-        "hex without prefix - lowercase, no numbers until later",
-        "deadbeef 123",
-        "deadbeef <int>",
-        "<hex> <int>",
-    ),
-    (
-        "hex without prefix - uppercase, no numbers until later",
-        "DEADBEEF 123",
-        "DEADBEEF <int>",
-        "<hex> <int>",
-    ),
     ("int - number in word", "Encoding: utf-8", "Encoding: utf-8", "Encoding: utf<int>"),
     ("int - with commas", "4,150,908", "<int>", "<int>,<int>,<int>"),
     (
