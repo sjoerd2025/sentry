@@ -127,7 +127,7 @@ class ProjectRuleListTest(ProjectRuleBaseTestCase):
         workflow_resp_1 = response.data[0]
         workflow_resp_2 = response.data[1]
 
-        if workflow_resp_1["id"] == self.rule.id:
+        if workflow_resp_1["id"] == str(self.rule.id):
             is_rule_resp = True
 
         if not is_rule_resp:
