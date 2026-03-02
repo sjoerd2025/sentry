@@ -76,7 +76,7 @@ class _Unset(Enum):
 class _ResponseBodyData(pydantic.BaseModel):
     data: Any
     type: ProviderName
-    raw: dict[str, Any]
+    raw: Any
 
 
 class _ResponseBody(pydantic.BaseModel):

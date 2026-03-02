@@ -133,7 +133,7 @@ class PullRequest(TypedDict):
     """Provider-agnostic representation of a pull request."""
 
     id: ResourceId
-    number: int
+    number: str
     title: str
     body: str | None
     state: Literal["open", "closed"]

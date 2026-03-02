@@ -234,14 +234,40 @@ class GitLabApiClient(IntegrationProxyClient, RepositoryClient, CommitContextCli
         """
         return self.post(GitLabApiClientPath.issues.format(project=project), data=data)
 
+    def get_issue_awards(self, project_id: str, issue_id: str):
+        return self.get(
+            GitLabApiClientPath.issue_awards.format(project_id=project_id, issue_id=issue_id)
+        )
+
+    def create_issue_award(self, project_id: str, issue_id: str, emoji: str):
+        return self.post(
+            GitLabApiClientPath.issue_awards.format(project_id=project_id, issue_id=issue_id),
+            params={"name": emoji},
+        )
+
+    def delete_issue_award(self, project_id: str, issue_id: str, award_id: str):
+        return self.delete(
+            GitLabApiClientPath.issue_award.format(
+                project_id=project_id, issue_id=issue_id, award_id=award_id
+            )
+        )
+
+    def get_issue_notes(self, project_id: str, issue_id: str):
+        """https://docs.gitlab.com/api/notes/#list-all-issue-notes"""
+        return self.get(
+            GitLabApiClientPath.issue_notes.format(project_id=project_id, issue_id=issue_id)
+        )
+
     def create_comment(self, repo: str, issue_id: str, data: dict[str, Any]):
         """Create an issue note/comment
 
         See https://docs.gitlab.com/ee/api/notes.html#create-new-issue-note
         """
         return self.post(
-            GitLabApiClientPath.create_issue_note.format(project=repo, issue_id=issue_id), data=data
+            GitLabApiClientPath.issue_notes.format(project_id=repo, issue_id=issue_id), data=data
         )
+
+    create_issue_note = create_comment
 
     def update_comment(self, repo: str, issue_id: str, comment_id: str, data: dict[str, Any]):
         """Modify existing issue note
@@ -249,10 +275,41 @@ class GitLabApiClient(IntegrationProxyClient, RepositoryClient, CommitContextCli
         See https://docs.gitlab.com/ee/api/notes.html#modify-existing-issue-note
         """
         return self.put(
-            GitLabApiClientPath.update_issue_note.format(
-                project=repo, issue_id=issue_id, note_id=comment_id
+            GitLabApiClientPath.issue_note.format(
+                project_id=repo, issue_id=issue_id, note_id=comment_id
             ),
             data=data,
+        )
+
+    def delete_issue_note(self, repo: str, issue_id: str, comment_id: str):
+        """https://docs.gitlab.com/api/notes/#delete-an-issue-note"""
+
+        return self.delete(
+            GitLabApiClientPath.issue_note.format(
+                project_id=repo, issue_id=issue_id, note_id=comment_id
+            )
+        )
+
+    def get_issue_note_awards(self, repo: str, issue_id: str, note_id: str):
+        return self.get(
+            GitLabApiClientPath.issue_note_awards.format(
+                project_id=repo, issue_id=issue_id, note_id=note_id
+            )
+        )
+
+    def create_issue_note_award(self, repo: str, issue_id: str, note_id: str, emoji: str):
+        return self.post(
+            GitLabApiClientPath.issue_note_awards.format(
+                project_id=repo, issue_id=issue_id, note_id=note_id
+            ),
+            params={"name": emoji},
+        )
+
+    def delete_issue_note_award(self, repo: str, issue_id: str, note_id: str, award_id: str):
+        return self.delete(
+            GitLabApiClientPath.issue_note_award.format(
+                project_id=repo, issue_id=issue_id, note_id=note_id, award_id=award_id
+            )
         )
 
     def get_merge_request(self, project_id: str, pr_key: str) -> Any:
@@ -260,10 +317,38 @@ class GitLabApiClient(IntegrationProxyClient, RepositoryClient, CommitContextCli
             GitLabApiClientPath.merge_request.format(project_id=project_id, pr_key=pr_key)
         )
 
+    def get_merge_requests(self, project_id: str) -> Any:
+        return self.get(
+            GitLabApiClientPath.merge_requests.format(project_id=project_id),
+            params={"state": "opened"},
+        )
+
+    def create_merge_request(self, project_id: str, data: dict[str, Any]) -> Any:
+        return self.post(
+            GitLabApiClientPath.merge_requests.format(project_id=project_id), data=data
+        )
+
+    def update_merge_request(self, project_id: str, pr_key: str, data: dict[str, Any]) -> Any:
+        return self.put(
+            GitLabApiClientPath.merge_request.format(project_id=project_id, pr_key=pr_key),
+            data=data,
+        )
+
+    def get_merge_request_notes(self, project_id: str, pr_key: str) -> Any:
+        return self.get(
+            GitLabApiClientPath.merge_request_notes.format(project_id=project_id, pr_key=pr_key)
+        )
+
     def create_pr_comment(self, repo: Repository, pr: PullRequest, data: dict[str, Any]) -> Any:
-        project_id = repo.config["project_id"]
-        url = GitLabApiClientPath.create_pr_note.format(project=project_id, pr_key=pr.key)
-        return self.post(url, data=data)
+        return self.create_merge_request_note(
+            project_id=repo.config["project_id"], pr_key=pr.key, data=data
+        )
+
+    def create_merge_request_note(self, project_id: str, pr_key: str, data: dict[str, Any]) -> Any:
+        return self.post(
+            GitLabApiClientPath.merge_request_notes.format(project_id=project_id, pr_key=pr_key),
+            data=data,
+        )
 
     def update_pr_comment(
         self,
@@ -273,10 +358,66 @@ class GitLabApiClient(IntegrationProxyClient, RepositoryClient, CommitContextCli
         data: dict[str, Any],
     ) -> Any:
         project_id = repo.config["project_id"]
-        url = GitLabApiClientPath.update_pr_note.format(
-            project=project_id, pr_key=pr.key, note_id=pr_comment.external_id
+        url = GitLabApiClientPath.merge_request_note.format(
+            project_id=project_id, pr_key=pr.key, note_id=pr_comment.external_id
         )
         return self.put(url, data=data)
+
+    def delete_merge_request_note(
+        self,
+        project_id: str,
+        pr_key: str,
+        note_id: str,
+    ) -> Any:
+        return self.delete(
+            GitLabApiClientPath.merge_request_note.format(
+                project_id=project_id, pr_key=pr_key, note_id=note_id
+            )
+        )
+
+    def get_merge_request_awards(self, project_id: str, pr_key: str):
+        return self.get(
+            GitLabApiClientPath.merge_request_awards.format(project_id=project_id, pr_key=pr_key)
+        )
+
+    def create_merge_request_award(self, project_id: str, pr_key: str, emoji: str):
+        return self.post(
+            GitLabApiClientPath.merge_request_awards.format(project_id=project_id, pr_key=pr_key),
+            params={"name": emoji},
+        )
+
+    def delete_merge_request_award(self, project_id: str, pr_key: str, award_id: str):
+        return self.delete(
+            GitLabApiClientPath.merge_request_award.format(
+                project_id=project_id, pr_key=pr_key, award_id=award_id
+            )
+        )
+
+    def get_merge_request_note_awards(self, project_id: str, pr_key: str, note_id: str):
+        return self.get(
+            GitLabApiClientPath.merge_request_note_awards.format(
+                project_id=project_id, pr_key=pr_key, note_id=note_id
+            )
+        )
+
+    def create_merge_request_note_award(
+        self, project_id: str, pr_key: str, note_id: str, emoji: str
+    ):
+        return self.post(
+            GitLabApiClientPath.merge_request_note_awards.format(
+                project_id=project_id, pr_key=pr_key, note_id=note_id
+            ),
+            params={"name": emoji},
+        )
+
+    def delete_merge_request_note_award(
+        self, project_id: str, pr_key: str, note_id: str, award_id: str
+    ):
+        return self.delete(
+            GitLabApiClientPath.merge_request_note_award.format(
+                project_id=project_id, pr_key=pr_key, note_id=note_id, award_id=award_id
+            )
+        )
 
     def search_project_issues(self, project_id, query, iids=None):
         """Search issues in a project

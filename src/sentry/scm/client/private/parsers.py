@@ -40,7 +40,7 @@ class PullRequestBranch(pydantic.BaseModel):
 
 class PullRequest(pydantic.BaseModel):
     id: ResourceId
-    number: int
+    number: str
     title: str
     body: str | None
     state: Literal["open", "closed"]

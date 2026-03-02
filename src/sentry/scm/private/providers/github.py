@@ -690,7 +690,9 @@ def map_graphql_author(raw_author: dict[str, Any] | None) -> Author | None:
     if raw_author is None:
         return None
     return Author(
+        # @todo Is there ever a 'databaseId' field? I got an error from GitHub: Field 'databaseId' doesn't exist on type 'Actor'
         id=str(raw_author["databaseId"]) if "databaseId" in raw_author else "",
+        # @todo Is it wise to return an empty string? If the error case is common, return None instead, and if it's not, raise an exception?
         username=raw_author.get("login", ""),
     )
 

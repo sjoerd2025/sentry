@@ -57,24 +57,41 @@ def switch(service: Service) -> Switch:
     return f
 
 
-def test_get_pull_request(switch: Switch, client: SourceCodeManagerRPCClient) -> None:
-    assert client.get_pull_request(switch("2", "1"))["data"] == {
-        "id": switch("3329785233", "459277081"),
-        "number": switch(2, 1),
-        "title": "Add blah",
-        "body": None,
-        "state": "open",
-        "merged": False,
-        "html_url": switch(
-            "https://github.com/jacquev6/test-Sentry-Integration-Dev-jacquev6/pull/2",
-            "https://gitlab.com/jacquev6-sentry/test-sentry-integration-dev-jacquev6/-/merge_requests/1",
-        ),
-        "head": {
-            "sha": "6d8ca33dae268d3c5835e721e5702ef9dcb43c8c",
-            "ref": "topics/blah",
-        },
-        "base": {"sha": switch("0941ee0a9eac9914cfddf5adec7a9558a2f1c447", None), "ref": "main"},
-    }
+def test_pull_requests(switch: Switch, client: SourceCodeManagerRPCClient) -> None:
+    pull_requests = client.get_pull_requests()["data"]
+    assert pull_requests == [
+        {
+            "id": switch("3329785233", "459277081"),
+            "number": switch("2", "1"),
+            "title": "Add blah",
+            "body": None,
+            "state": "open",
+            "merged": False,
+            "html_url": switch(
+                "https://github.com/jacquev6/test-Sentry-Integration-Dev-jacquev6/pull/2",
+                "https://gitlab.com/jacquev6-sentry/test-sentry-integration-dev-jacquev6/-/merge_requests/1",
+            ),
+            "head": {
+                "sha": "6d8ca33dae268d3c5835e721e5702ef9dcb43c8c",
+                "ref": "topics/blah",
+            },
+            "base": {
+                "sha": switch("0941ee0a9eac9914cfddf5adec7a9558a2f1c447", None),
+                "ref": "main",
+            },
+        }
+    ]
+    assert client.get_pull_request(switch("2", "1"))["data"] == pull_requests[0]
+    new_pull_request = client.create_pull_request(
+        title=f"PR from API {datetime.now()}",
+        body="Another PR, made through the API.",
+        head="topics/blih",
+        base="main",
+    )["data"]
+    assert new_pull_request["body"] == "Another PR, made through the API."
+    assert len(client.get_pull_requests()["data"]) == 2
+    client.update_pull_request(new_pull_request["number"], state="closed")
+    assert len(client.get_pull_requests()["data"]) == 1
 
 
 def test_get_commits(switch: Switch, client: SourceCodeManagerRPCClient) -> None:
@@ -90,3 +107,182 @@ def test_get_commits(switch: Switch, client: SourceCodeManagerRPCClient) -> None
             "files": switch([], None),
         }
     ]
+
+
+def test_issue_comments(switch: Switch, client: SourceCodeManagerRPCClient) -> None:
+    assert client.get_issue_comments("1")["data"] == [
+        {
+            "id": switch("3983150774", "3123861269"),
+            "body": "A comment!",
+            "author": {"id": switch("327146", "150871"), "username": "jacquev6"},
+        }
+    ]
+    new_comment = client.create_issue_comment(
+        issue_id="1", body="Another comment, made through the API."
+    )["data"]
+    assert new_comment["body"] == "Another comment, made through the API."
+    assert len(client.get_issue_comments("1")["data"]) == 2
+    client.delete_issue_comment(comment_id=new_comment["id"])
+    assert len(client.get_issue_comments("1")["data"]) == 1
+
+
+def test_issue_comment_reactions(
+    service: Service, switch: Switch, client: SourceCodeManagerRPCClient
+) -> None:
+    author = {"id": switch("327146", "150871"), "username": "jacquev6"}
+    comment_id = switch("3983150774", "3123861269")
+    reactions = client.get_issue_comment_reactions(comment_id)
+    assert reactions["data"] == [
+        {
+            "id": switch("334443540", "43909506"),
+            "content": "+1",
+            "author": author,
+        },
+        {
+            "id": switch("334443546", "43909515"),
+            "content": "eyes",
+            "author": author,
+        },
+        {
+            "id": switch("334450300", "43911188"),
+            "content": "-1",
+            "author": author,
+        },
+        {
+            "id": switch("334450310", "43911265"),
+            "content": "laugh",
+            "author": author,
+        },
+        {
+            "id": switch("334450319", "43911283"),
+            "content": "hooray",
+            "author": author,
+        },
+        {
+            "id": switch("334450331", "43911304"),
+            "content": "confused",
+            "author": author,
+        },
+        {
+            "id": switch("334450342", "43911321"),
+            "content": "heart",
+            "author": author,
+        },
+    ]
+    if service == "github":
+        assert len(reactions["raw"]["items"]) == 7
+    else:
+        # One GitLab emoji is not mapped, so it's dropped silently
+        assert len(reactions["raw"]) == 8
+    new_reaction = client.create_issue_comment_reaction(comment_id=comment_id, reaction="rocket")[
+        "data"
+    ]
+    assert new_reaction["content"] == "rocket"
+    assert len(client.get_issue_comment_reactions(comment_id)["data"]) == 8
+    client.delete_issue_comment_reaction(comment_id=comment_id, reaction_id=new_reaction["id"])
+    assert len(client.get_issue_comment_reactions(comment_id)["data"]) == 7
+
+
+def test_pull_request_comments(switch: Switch, client: SourceCodeManagerRPCClient) -> None:
+    pull_request_id = switch("2", "1")
+    assert client.get_pull_request_comments(pull_request_id)["data"] == [
+        {
+            # @todo Why are we using a node_id on GitHub?
+            # This doesn't integrate well with get_pull_request_comment_reactions and related.
+            "id": switch("IC_kwDORRhd7M7tbiJH", "3124015530"),
+            "body": "A great comment!",
+            "author": {"id": switch("", "150871"), "username": "jacquev6"},
+        }
+    ]
+    new_comment = client.create_pull_request_comment(
+        pull_request_id=pull_request_id, body="Another comment, made through the API."
+    )["data"]
+    assert new_comment["body"] == "Another comment, made through the API."
+    assert len(client.get_pull_request_comments(pull_request_id)["data"]) == 2
+    client.delete_pull_request_comment(comment_id=new_comment["id"])
+    assert len(client.get_pull_request_comments(pull_request_id)["data"]) == 1
+
+
+def test_pull_request_comment_reactions(
+    service: Service, switch: Switch, client: SourceCodeManagerRPCClient
+) -> None:
+    comment_id = switch("3983417927", "3124015530")
+    reactions = client.get_pull_request_comment_reactions(comment_id)
+    assert reactions["data"] == [
+        {
+            "id": switch("334495774", "43921665"),
+            "content": "+1",
+            "author": {"id": switch("327146", "150871"), "username": "jacquev6"},
+        }
+    ]
+    if service == "github":
+        assert len(reactions["raw"]["items"]) == 1
+    else:
+        # One GitLab emoji is not mapped, so it's dropped silently
+        assert len(reactions["raw"]) == 2
+    new_reaction = client.create_pull_request_comment_reaction(
+        comment_id=comment_id, reaction="rocket"
+    )["data"]
+    assert new_reaction["content"] == "rocket"
+    assert len(client.get_pull_request_comment_reactions(comment_id)["data"]) == 2
+    client.delete_pull_request_comment_reaction(
+        comment_id=comment_id, reaction_id=new_reaction["id"]
+    )
+    assert len(client.get_pull_request_comment_reactions(comment_id)["data"]) == 1
+
+
+def test_issue_reactions(
+    service: Service, switch: Switch, client: SourceCodeManagerRPCClient
+) -> None:
+    issue_id = "1"
+    reactions = client.get_issue_reactions(issue_id)
+    assert reactions["data"] == [
+        {
+            "id": switch("277533978", "43923647"),
+            "content": "+1",
+            "author": {"id": switch("327146", "150871"), "username": "jacquev6"},
+        },
+        {
+            "id": switch("277533995", "43923674"),
+            "content": "hooray",
+            "author": {"id": switch("327146", "150871"), "username": "jacquev6"},
+        },
+    ]
+    if service == "github":
+        assert len(reactions["raw"]["items"]) == 2
+    else:
+        # One GitLab emoji is not mapped, so it's dropped silently
+        assert len(reactions["raw"]) == 3
+    new_reaction = client.create_issue_reaction(issue_id=issue_id, reaction="rocket")["data"]
+    assert new_reaction["content"] == "rocket"
+    assert len(client.get_issue_reactions(issue_id)["data"]) == 3
+    client.delete_issue_reaction(issue_id=issue_id, reaction_id=new_reaction["id"])
+    assert len(client.get_issue_reactions(issue_id)["data"]) == 2
+
+
+def test_pull_request_reactions(
+    service: Service, switch: Switch, client: SourceCodeManagerRPCClient
+) -> None:
+    pull_request_id = switch("2", "1")
+    reactions = client.get_pull_request_reactions(pull_request_id)
+    assert reactions["data"] == [
+        {
+            "id": switch("277538935", "43924243"),
+            "content": "-1",
+            "author": {"id": switch("327146", "150871"), "username": "jacquev6"},
+        }
+    ]
+    if service == "github":
+        assert len(reactions["raw"]["items"]) == 1
+    else:
+        # One GitLab emoji is not mapped, so it's dropped silently
+        assert len(reactions["raw"]) == 2
+    new_reaction = client.create_pull_request_reaction(
+        pull_request_id=pull_request_id, reaction="rocket"
+    )["data"]
+    assert new_reaction["content"] == "rocket"
+    assert len(client.get_pull_request_reactions(pull_request_id)["data"]) == 2
+    client.delete_pull_request_reaction(
+        pull_request_id=pull_request_id, reaction_id=new_reaction["id"]
+    )
+    assert len(client.get_pull_request_reactions(pull_request_id)["data"]) == 1

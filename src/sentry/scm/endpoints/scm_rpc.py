@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import logging
+import traceback
 import typing
 from collections.abc import Callable
 from typing import Any, cast
@@ -205,12 +206,14 @@ class ScmRpcServiceEndpoint(Endpoint):
             result = self._dispatch_to_source_code_manager(method_name, request.data)
         except SCMCodedError as e:
             sentry_sdk.capture_exception()
+            traceback.print_exc()
             return Response(
                 data={"errors": [{"type": "SCMCodedError", "details": self._make_details(e)}]},
                 status=400,
             )
         except SCMProviderException as e:
             sentry_sdk.capture_exception()
+            traceback.print_exc()
             return Response(
                 data={
                     "errors": [{"type": "SCMProviderException", "details": self._make_details(e)}]
@@ -219,6 +222,7 @@ class ScmRpcServiceEndpoint(Endpoint):
             )
         except SCMError as e:
             sentry_sdk.capture_exception()
+            traceback.print_exc()
             return Response(
                 data={"errors": [{"type": "SCMError", "details": self._make_details(e)}]},
                 status=500,
@@ -283,7 +287,7 @@ scm_method_registry: dict[str, Callable] = {
     "get_pull_request_files_v1": SourceCodeManager.get_pull_request_files,
     "get_pull_request_commits_v1": SourceCodeManager.get_pull_request_commits,
     "get_pull_request_diff_v1": SourceCodeManager.get_pull_request_diff,
-    "list_pull_requests_v1": SourceCodeManager.get_pull_requests,
+    "get_pull_requests_v1": SourceCodeManager.get_pull_requests,
     "create_pull_request_v1": SourceCodeManager.create_pull_request,
     "update_pull_request_v1": SourceCodeManager.update_pull_request,
     "request_review_v1": SourceCodeManager.request_review,
