@@ -100,11 +100,8 @@ from django.utils import timezone
 from sentry import models, nodestore, options
 from sentry.attachments import CachedAttachment, attachment_cache, store_attachments_for_event
 from sentry.deletions.defaults.group import DIRECT_GROUP_RELATED_MODELS
-from sentry.models.eventattachment import V1_PREFIX, V2_PREFIX, EventAttachment
-from sentry.models.files.utils import get_storage
+from sentry.models.eventattachment import V2_PREFIX, EventAttachment
 from sentry.models.project import Project
-from sentry.objectstore import get_attachments_session
-from sentry.options.rollout import in_random_rollout
 from sentry.search.eap.occurrences.common_queries import count_occurrences
 from sentry.search.eap.occurrences.rollout_utils import EAPOccurrencesComparator
 from sentry.services import eventstore
@@ -414,27 +411,12 @@ def _maybe_copy_attachment_into_cache(
     stored_id = None
     chunks = None
 
-    if in_random_rollout("objectstore.enable_for.attachments"):
-        blob_path = attachment.blob_path or ""
-        if blob_path.startswith(V2_PREFIX):
-            # in case the attachment is already stored in objectstore, there is nothing to do
-            stored_id = blob_path.removeprefix(V2_PREFIX)
-        else:
-            # otherwise, we store it in objectstore
-            with attachment.getfile() as fp:
-                stored_id = get_attachments_session(project.organization_id, project.id).put(fp)
-            # but we then also make that storage permanent, as otherwise
-            # the codepaths won’t be cleaning up this stored file.
-            # essentially this means we are moving the file from the previous storage
-            # into objectstore at this point.
-            attachment.blob_path = V2_PREFIX + stored_id
-            attachment.save()
-            if blob_path.startswith(V1_PREFIX):
-                storage = get_storage()
-                storage.delete(blob_path)
-
+    blob_path = attachment.blob_path or ""
+    if blob_path.startswith(V2_PREFIX):
+        # attachment is already in objectstore, nothing to do
+        stored_id = blob_path.removeprefix(V2_PREFIX)
     else:
-        # when not using objectstore, store chunks in the attachment cache
+        # store chunks in the attachment cache
         with attachment.getfile() as fp:
             chunk_index = 0
             size = 0

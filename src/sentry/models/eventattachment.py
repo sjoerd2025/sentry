@@ -79,9 +79,11 @@ class EventAttachment(Model):
       It is saved inline in `blob_path` following the `:` prefix.
       This happens for "small" and ASCII-only (see `can_store_inline`) attachments.
     - When the `blob_path` field has a `eventattachments/v1/` prefix:
-      In this case, the default :func:`get_storage` is used as the backing store.
+      The default :func:`get_storage` is used as the backing store.
       The attachment data is not chunked or deduplicated in this case.
       However, it is `zstd` compressed.
+    - When the `blob_path` field has a `v2/` prefix:
+      The objectstore is used as the backing store.
     """
 
     __relocation_scope__ = RelocationScope.Excluded
@@ -214,7 +216,7 @@ class EventAttachment(Model):
         if can_store_inline(data):
             blob_path = ":" + data.decode()
 
-        elif not in_random_rollout("objectstore.enable_for.attachments"):
+        else:
             from sentry.models.files import FileBlob
 
             object_key = FileBlob.generate_unique_path()
@@ -234,10 +236,6 @@ class EventAttachment(Model):
                 compressed_blob = zstandard.compress(data)
                 metric_emitter.record_compressed_size(len(compressed_blob), "zstd")
                 storage.save(blob_path, BytesIO(compressed_blob))
-
-        else:
-            organization_id = _get_organization(project_id)
-            blob_path = V2_PREFIX + get_attachments_session(organization_id, project_id).put(data)
 
         return PutfileResult(
             content_type=content_type, size=size, sha1=checksum, blob_path=blob_path
