@@ -153,7 +153,7 @@ class DebugTraceLogger:
 
         segment_span_id = segment_key.split(b":")[-1].decode("ascii")
 
-        deadline_advanced_by = (new_deadline - old_deadline) if old_deadline else None
+        deadline_advanced_by = new_deadline - old_deadline if old_deadline is not None else None
         is_new_segment = old_deadline is None
 
         logger.info(
@@ -167,9 +167,9 @@ class DebugTraceLogger:
                 "new_deadline": new_deadline,
                 "deadline_advanced_by_seconds": deadline_advanced_by,
                 "message_timestamp": message_timestamp,
-                "old_ttl_remaining_seconds": (old_deadline - message_timestamp)
-                if old_deadline
-                else None,
+                "old_ttl_remaining_seconds": (
+                    old_deadline - message_timestamp if old_deadline is not None else None
+                ),
                 "new_ttl_remaining_seconds": new_deadline - message_timestamp,
             },
         )
