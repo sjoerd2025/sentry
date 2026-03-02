@@ -246,6 +246,7 @@ incorrect_cases = [
         "<hex> <int>",
     ),
     ("int - number in word", "Encoding: utf-8", "Encoding: utf-8", "Encoding: utf<int>"),
+    ("int - with commas", "4,150,908", "<int>", "<int>,<int>,<int>"),
     (
         "ip - double colon object property",
         "Option::unwrap()",
